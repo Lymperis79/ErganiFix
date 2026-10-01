@@ -89,8 +89,7 @@ public class WorkCardEntry
     public DateTimeOffset MovementDateTime { get; set; }
 
     [JsonPropertyName("f_aitiologia")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public string? LateDeclarationJustification { get; set; }
+    public string LateDeclarationJustification { get; set; } = string.Empty;
 }
 
 /// <summary>

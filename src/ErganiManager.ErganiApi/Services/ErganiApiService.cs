@@ -39,7 +39,7 @@ public class ErganiApiService : IWorkCardSubmitter
     /// carries IDs), builds the Ergani payload, submits, and writes a new
     /// WorkCard + ApiSubmissionLog row reflecting the outcome.
     /// </summary>
-    public async Task<WorkCardSubmissionOutcome> SubmitAsync(WorkCardSubmissionRequest request, string? aitiologia = null)
+    public async Task<WorkCardSubmissionOutcome> SubmitAsync(WorkCardSubmissionRequest request, string aitiologia = "")
     {
         var config = _connectionState.LoadConfig();
         if (config == null)
@@ -83,7 +83,7 @@ public class ErganiApiService : IWorkCardSubmitter
                         SubmissionDate                  = DateOnly.FromDateTime(request.MovementDateTime.Date),
                         MovementDateTime                = new DateTimeOffset(request.MovementDateTime,
                                                             TimeZoneInfo.Local.GetUtcOffset(request.MovementDateTime)),
-                        LateDeclarationJustification    = aitiologia
+                        LateDeclarationJustification    = aitiologia ?? string.Empty
                     }
                 }
             }
