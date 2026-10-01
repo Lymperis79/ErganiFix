@@ -16,61 +16,116 @@ namespace ErganiManager.UI.ViewModels;
 public class SubmissionLogRow
 {
     public int Id { get; set; }
+
     public string SubmissionType { get; set; } = string.Empty;
+
     public DateTime SubmissionDate { get; set; }
+
     public bool Success { get; set; }
+
     public int? HttpStatusCode { get; set; }
+
     public string? Protocol { get; set; }
+
     public string? ErrorMessage { get; set; }
+
     public long DurationMs { get; set; }
+
     public string? RequestPayloadJson { get; set; }
+
     public string? ResponseRawJson { get; set; }
 
     public string StatusIcon => Success ? "✅" : "❌";
+
     public string DurationText => $"{DurationMs} ms";
-    public string DateText => SubmissionDate.ToString("dd/MM/yyyy HH:mm:ss");
+
+    public string DateText =>
+        SubmissionDate.ToString("dd/MM/yyyy HH:mm:ss");
 }
 
 public class FailedSubmissionRow
 {
     public int Id { get; set; }
+
     public string EmployeeId { get; set; } = string.Empty;
+
     public string MovementType { get; set; } = string.Empty;
+
     public DateTime OriginalScannedAt { get; set; }
+
     public string FailureReason { get; set; } = string.Empty;
+
     public string? ErrorDescription { get; set; }
+
     public int RetryCount { get; set; }
+
     public DateTime? LastRetryAt { get; set; }
+
     public string? LastRetryError { get; set; }
 
-    public string ScanTimeText => OriginalScannedAt.ToString("dd/MM/yyyy HH:mm:ss");
-    public string LastRetryText => LastRetryAt?.ToString("dd/MM/yyyy HH:mm") ?? "Never";
-    public string MovementIcon => MovementType == "Arrival" ? "🟢" : "🔴";
+    public string ScanTimeText =>
+        OriginalScannedAt.ToString("dd/MM/yyyy HH:mm:ss");
+
+    public string LastRetryText =>
+        LastRetryAt?.ToString("dd/MM/yyyy HH:mm") ?? "Never";
+
+    public string MovementIcon =>
+        MovementType == "Arrival" ? "🟢" : "🔴";
 }
 
-public partial class SubmissionLogViewModel : ViewModelBase, IAdminSectionViewModel
+public partial class SubmissionLogViewModel
+    : ViewModelBase, IAdminSectionViewModel
 {
     private readonly IConnectionStateService _connectionState;
     private readonly ErganiRetryService _retryService;
+
     private UserSession? _session;
 
     public ObservableCollection<SubmissionLogRow> Rows { get; } = new();
+
     public ObservableCollection<FailedSubmissionRow> FailedSubmissions { get; } = new();
 
-    [ObservableProperty] private bool _hasActiveCompany;
-    [ObservableProperty] private string _noCompanyMessage = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _isLoading;
-    [ObservableProperty] private bool _isRetrying;
-    [ObservableProperty] private string _failedCountText = string.Empty;
+    [ObservableProperty]
+    private bool _hasActiveCompany;
 
-    [ObservableProperty] private DateTimeOffset? _filterFrom = DateTimeOffset.Now.AddDays(-7);
-    [ObservableProperty] private DateTimeOffset? _filterTo = DateTimeOffset.Now;
-    [ObservableProperty] private bool _filterFailuresOnly;
+    [ObservableProperty]
+    private string _noCompanyMessage = string.Empty;
 
-    [ObservableProperty] private SubmissionLogRow? _selectedRow;
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
 
-    public SubmissionLogViewModel(IConnectionStateService connectionState, ErganiRetryService retryService)
+    [ObservableProperty]
+    private bool _isLoading;
+
+    [ObservableProperty]
+    private bool _isRetrying;
+
+    [ObservableProperty]
+    private string _failedCountText = string.Empty;
+
+    /*
+     * Avalonia DatePicker uses DateTimeOffset?.
+     *
+     * Keep the ViewModel type as DateTimeOffset? so the binding
+     * does not require a converter.
+     */
+    [ObservableProperty]
+    private DateTimeOffset? _filterFromDate =
+        new DateTimeOffset(DateTime.Today.AddDays(-7));
+
+    [ObservableProperty]
+    private DateTimeOffset? _filterToDate =
+        new DateTimeOffset(DateTime.Today);
+
+    [ObservableProperty]
+    private bool _filterFailuresOnly;
+
+    [ObservableProperty]
+    private SubmissionLogRow? _selectedRow;
+
+    public SubmissionLogViewModel(
+        IConnectionStateService connectionState,
+        ErganiRetryService retryService)
     {
         _connectionState = connectionState;
         _retryService = retryService;
@@ -79,7 +134,9 @@ public partial class SubmissionLogViewModel : ViewModelBase, IAdminSectionViewMo
     public void Initialize(UserSession session)
     {
         _session = session;
+
         HasActiveCompany = session.CompanyId.HasValue;
+
         NoCompanyMessage = session.CompanyId.HasValue
             ? string.Empty
             : Loc[L.NavCompanies];
@@ -94,53 +151,69 @@ public partial class SubmissionLogViewModel : ViewModelBase, IAdminSectionViewMo
     [RelayCommand]
     private async Task LoadFailedSubmissionsAsync()
     {
-        if (_session?.CompanyId is not int companyId) return;
+        if (_session?.CompanyId is not int companyId)
+            return;
 
         using var cache = LocalCacheDbContextFactory.Create();
+
         var items = await cache.FailedSubmissions
-            .Where(f => f.CompanyId == companyId && !f.Resolved)
+            .Where(f =>
+                f.CompanyId == companyId &&
+                !f.Resolved)
             .OrderBy(f => f.OriginalScannedAt)
             .ToListAsync();
 
         FailedSubmissions.Clear();
+
         foreach (var f in items)
         {
             FailedSubmissions.Add(new FailedSubmissionRow
             {
-                Id                = f.Id,
-                EmployeeId        = f.EmployeeId.ToString(),
-                MovementType      = f.MovementType,
+                Id = f.Id,
+                EmployeeId = f.EmployeeId.ToString(),
+                MovementType = f.MovementType,
                 OriginalScannedAt = f.OriginalScannedAt,
-                FailureReason     = f.FailureReason,
-                ErrorDescription  = f.ErrorDescription,
-                RetryCount        = f.RetryCount,
-                LastRetryAt       = f.LastRetryAt,
-                LastRetryError    = f.LastRetryError
+                FailureReason = f.FailureReason,
+                ErrorDescription = f.ErrorDescription,
+                RetryCount = f.RetryCount,
+                LastRetryAt = f.LastRetryAt,
+                LastRetryError = f.LastRetryError
             });
         }
 
         FailedCountText = FailedSubmissions.Count == 0
             ? Loc[L.NoFailedPending]
-            : string.Format(Loc[L.PendingRetry], FailedSubmissions.Count);
+            : string.Format(
+                Loc[L.PendingRetry],
+                FailedSubmissions.Count);
     }
 
     [RelayCommand]
     private async Task ManualRetryNowAsync()
     {
-        if (_session?.CompanyId is null) return;
+        if (_session?.CompanyId is null)
+            return;
 
         IsRetrying = true;
         StatusMessage = "Triggering manual retry...";
+
         try
         {
             _retryService.Start();
+
             await Task.Delay(TimeSpan.FromSeconds(3));
+
             await LoadFailedSubmissionsAsync();
-            StatusMessage = Loc[L.SuccessPrefix] + "Manual retry triggered.";
+
+            StatusMessage =
+                Loc[L.SuccessPrefix] +
+                "Manual retry triggered.";
         }
         catch (Exception ex)
         {
-            StatusMessage = Loc[L.ErrorPrefix] + ex.Message;
+            StatusMessage =
+                Loc[L.ErrorPrefix] +
+                ex.Message;
         }
         finally
         {
@@ -151,25 +224,65 @@ public partial class SubmissionLogViewModel : ViewModelBase, IAdminSectionViewMo
     [RelayCommand]
     private async Task LoadAsync()
     {
-        if (_session?.CompanyId is not int companyId) return;
+        if (_session?.CompanyId is not int companyId)
+            return;
 
         IsLoading = true;
         StatusMessage = string.Empty;
 
         try
         {
-            await using var db = new AppDbContext(_connectionState.GetDbOptions());
+            await using var db =
+                new AppDbContext(_connectionState.GetDbOptions());
 
-            var fromDt = (FilterFrom ?? DateTimeOffset.Now).UtcDateTime;
-            var toDt   = (FilterTo ?? DateTimeOffset.Now).UtcDateTime;
+            /*
+             * DatePicker gives us DateTimeOffset?.
+             *
+             * We only want the calendar date selected by the user.
+             * Do NOT convert this to UTC.
+             */
+            var fromDate =
+                (FilterFromDate ?? DateTimeOffset.Now).Date;
+
+            var toDate =
+                (FilterToDate ?? DateTimeOffset.Now).Date;
+
+            /*
+             * If the dates are reversed, use the same day as a
+             * safe fallback rather than producing an empty result.
+             */
+            if (toDate < fromDate)
+            {
+                toDate = fromDate;
+            }
+
+            /*
+             * End date is exclusive.
+             *
+             * Example:
+             *
+             * From = 01/10/2026
+             * To   = 01/10/2026
+             *
+             * SQL range:
+             *
+             * >= 01/10/2026 00:00:00
+             * <  02/10/2026 00:00:00
+             *
+             * This includes the complete selected day.
+             */
+            var toDateExclusive = toDate.AddDays(1);
 
             var query = db.ApiSubmissionLogs
-                .Where(l => l.CompanyId == companyId
-                         && l.SubmissionDate >= fromDt
-                         && l.SubmissionDate <= toDt);
+                .Where(l =>
+                    l.CompanyId == companyId &&
+                    l.SubmissionDate >= fromDate &&
+                    l.SubmissionDate < toDateExclusive);
 
             if (FilterFailuresOnly)
+            {
                 query = query.Where(l => !l.Success);
+            }
 
             var results = await query
                 .OrderByDescending(l => l.SubmissionDate)
@@ -177,20 +290,21 @@ public partial class SubmissionLogViewModel : ViewModelBase, IAdminSectionViewMo
                 .ToListAsync();
 
             Rows.Clear();
+
             foreach (var r in results)
             {
                 Rows.Add(new SubmissionLogRow
                 {
-                    Id                 = r.Id,
-                    SubmissionType     = r.SubmissionType,
-                    SubmissionDate     = r.SubmissionDate,
-                    Success            = r.Success,
-                    HttpStatusCode     = r.HttpStatusCode,
-                    Protocol           = r.Protocol,
-                    ErrorMessage       = r.ErrorMessage,
-                    DurationMs         = r.DurationMs,
+                    Id = r.Id,
+                    SubmissionType = r.SubmissionType,
+                    SubmissionDate = r.SubmissionDate,
+                    Success = r.Success,
+                    HttpStatusCode = r.HttpStatusCode,
+                    Protocol = r.Protocol,
+                    ErrorMessage = r.ErrorMessage,
+                    DurationMs = r.DurationMs,
                     RequestPayloadJson = r.RequestPayloadJson,
-                    ResponseRawJson    = r.ResponseRawJson
+                    ResponseRawJson = r.ResponseRawJson
                 });
             }
 
@@ -200,7 +314,9 @@ public partial class SubmissionLogViewModel : ViewModelBase, IAdminSectionViewMo
         }
         catch (Exception ex)
         {
-            StatusMessage = Loc[L.ErrorPrefix] + ex.Message;
+            StatusMessage =
+                Loc[L.ErrorPrefix] +
+                ex.Message;
         }
         finally
         {
@@ -208,3 +324,4 @@ public partial class SubmissionLogViewModel : ViewModelBase, IAdminSectionViewMo
         }
     }
 }
+

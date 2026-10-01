@@ -16,23 +16,50 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
     private readonly IWorkCardHistoryService _historyService;
     private readonly IEmployeeService _employeeService;
     private readonly IBranchService _branchService;
+
     private UserSession? _session;
 
     public ObservableCollection<WorkCardHistoryDto> Records { get; } = new();
+
     public ObservableCollection<EmployeeDto> AvailableEmployees { get; } = new();
+
     public ObservableCollection<BranchDto> AvailableBranches { get; } = new();
 
-    [ObservableProperty] private bool _hasActiveCompany;
-    [ObservableProperty] private string _noCompanyMessage = string.Empty;
-    [ObservableProperty] private string _statusMessage = string.Empty;
-    [ObservableProperty] private bool _isLoading;
+    [ObservableProperty]
+    private bool _hasActiveCompany;
 
-    // Filter fields
-    [ObservableProperty] private DateTimeOffset? _filterFromDate = DateTimeOffset.Now.AddDays(-30);
-    [ObservableProperty] private DateTimeOffset? _filterToDate = DateTimeOffset.Now;
-    [ObservableProperty] private EmployeeDto? _filterEmployee;
-    [ObservableProperty] private BranchDto? _filterBranch;
-    [ObservableProperty] private bool _filterEarlyDepartureOnly;
+    [ObservableProperty]
+    private string _noCompanyMessage = string.Empty;
+
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool _isLoading;
+
+    // --------------------------------------------------------------------
+    // Filters
+    //
+    // Avalonia DatePicker.SelectedDate uses DateTimeOffset?.
+    // Keep these properties as DateTimeOffset? so no converter is required.
+    // --------------------------------------------------------------------
+
+    [ObservableProperty]
+    private DateTimeOffset? _filterFromDate =
+        new DateTimeOffset(DateTime.Today.AddDays(-30));
+
+    [ObservableProperty]
+    private DateTimeOffset? _filterToDate =
+        new DateTimeOffset(DateTime.Today);
+
+    [ObservableProperty]
+    private EmployeeDto? _filterEmployee;
+
+    [ObservableProperty]
+    private BranchDto? _filterBranch;
+
+    [ObservableProperty]
+    private bool _filterEarlyDepartureOnly;
 
     public WorkCardHistoryViewModel(
         IWorkCardHistoryService historyService,
@@ -47,7 +74,9 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
     public void Initialize(UserSession session)
     {
         _session = session;
+
         HasActiveCompany = session.CompanyId.HasValue;
+
         NoCompanyMessage = session.CompanyId.HasValue
             ? string.Empty
             : "Select a company first (Super Admin: pick a company from the Companies tab).";
@@ -58,23 +87,52 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
 
     private async Task LoadFiltersAsync()
     {
-        if (_session?.CompanyId is not int companyId) return;
+        if (_session?.CompanyId is not int companyId)
+            return;
 
-        var employees = await _employeeService.GetByCompanyAsync(companyId, activeOnly: false).ConfigureAwait(false);
+        var employees =
+            await _employeeService
+                .GetByCompanyAsync(companyId, activeOnly: false)
+                .ConfigureAwait(false);
+
         AvailableEmployees.Clear();
-        AvailableEmployees.Add(new EmployeeDto { Id = 0, FirstName = "All", LastName = "Employees" });
-        foreach (var e in employees) AvailableEmployees.Add(e);
 
-        var branches = await _branchService.GetByCompanyAsync(companyId).ConfigureAwait(false);
+        AvailableEmployees.Add(
+            new EmployeeDto
+            {
+                Id = 0,
+                FirstName = "All",
+                LastName = "Employees"
+            });
+
+        foreach (var employee in employees)
+            AvailableEmployees.Add(employee);
+
+        var branches =
+            await _branchService
+                .GetByCompanyAsync(companyId)
+                .ConfigureAwait(false);
+
         AvailableBranches.Clear();
-        AvailableBranches.Add(new BranchDto { Id = 0, Name = "All Branches" });
-        foreach (var b in branches) AvailableBranches.Add(b);
+
+        AvailableBranches.Add(
+            new BranchDto
+            {
+                Id = 0,
+                Name = "All Branches"
+            });
+
+        foreach (var branch in branches)
+            AvailableBranches.Add(branch);
 
         FilterEmployee = AvailableEmployees[0];
         FilterBranch = AvailableBranches[0];
-        StatusMessage = "Set filters and press Load to view records.";
-        // Do NOT auto-load records — wait for explicit Load button press
-        // to avoid blinking and unnecessary DB queries on navigation.
+
+        StatusMessage =
+            "Set filters and press Load to view records.";
+
+        // Do not automatically load records.
+        // Records are loaded only when the user presses Load.
     }
 
     [RelayCommand]
@@ -82,51 +140,106 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
     {
         if (!Records.Any())
         {
-            StatusMessage = "No records to export — apply filters and load first.";
+            StatusMessage =
+                "No records to export — apply filters and load first.";
+
             return;
         }
 
         try
         {
-            var folder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            var filePath = ExcelImportExportService.ExportWorkCardHistory(Records.ToList(), folder);
-            StatusMessage = $"✅ Exported to Desktop: {Path.GetFileName(filePath)}";
+            var folder =
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.Desktop);
+
+            var filePath =
+                ExcelImportExportService.ExportWorkCardHistory(
+                    Records.ToList(),
+                    folder);
+
+            StatusMessage =
+                $"✅ Exported to Desktop: {Path.GetFileName(filePath)}";
         }
         catch (Exception ex)
         {
-            StatusMessage = $"❌ Export failed: {ex.Message}";
+            StatusMessage =
+                $"❌ Export failed: {ex.Message}";
         }
     }
 
     [RelayCommand]
     private async Task LoadAsync()
     {
-        if (_session?.CompanyId is not int companyId) return;
+        if (_session?.CompanyId is not int companyId)
+            return;
 
         IsLoading = true;
         StatusMessage = string.Empty;
 
         try
         {
+            /*
+             * DatePicker returns DateTimeOffset?.
+             *
+             * We are interested in the calendar date selected by
+             * the user, not the UTC timestamp.
+             */
+            var fromDate =
+                (FilterFromDate ?? DateTimeOffset.Now.AddDays(-30))
+                .Date;
+
+            var toDate =
+                (FilterToDate ?? DateTimeOffset.Now)
+                .Date;
+
+            /*
+             * Protect against an inverted date range.
+             */
+            if (toDate < fromDate)
+            {
+                toDate = fromDate;
+            }
+
             var filter = new WorkCardHistoryFilter
             {
-                FromDate = DateOnly.FromDateTime((FilterFromDate ?? DateTimeOffset.Now.AddDays(-30)).LocalDateTime),
-                ToDate = DateOnly.FromDateTime((FilterToDate ?? DateTimeOffset.Now).LocalDateTime),
-                EmployeeId = FilterEmployee?.Id == 0 ? null : FilterEmployee?.Id,
-                BranchId = FilterBranch?.Id == 0 ? null : FilterBranch?.Id,
-                EarlyDepartureOnly = FilterEarlyDepartureOnly ? true : null
+                FromDate = DateOnly.FromDateTime(fromDate),
+
+                ToDate = DateOnly.FromDateTime(toDate),
+
+                EmployeeId =
+                    FilterEmployee?.Id == 0
+                        ? null
+                        : FilterEmployee?.Id,
+
+                BranchId =
+                    FilterBranch?.Id == 0
+                        ? null
+                        : FilterBranch?.Id,
+
+                EarlyDepartureOnly =
+                    FilterEarlyDepartureOnly
+                        ? true
+                        : null
             };
 
-            var results = await _historyService.GetAsync(companyId, filter).ConfigureAwait(false);
-            await Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                Records.Clear();
-                foreach (var r in results) Records.Add(r);
-            });
+            var results =
+                await _historyService
+                    .GetAsync(companyId, filter)
+                    .ConfigureAwait(false);
 
-            StatusMessage = results.Count == 1000
-                ? $"Showing first 1,000 records — narrow the date range for more precision."
-                : $"{results.Count} record(s) found.";
+            await Avalonia.Threading.Dispatcher.UIThread
+                .InvokeAsync(() =>
+                {
+                    Records.Clear();
+
+                    foreach (var record in results)
+                        Records.Add(record);
+                });
+
+            StatusMessage =
+                results.Count == 1000
+                    ? "Showing first 1,000 records — narrow the date range for more precision."
+                    : $"{results.Count} record(s) found.";
         }
         catch (Exception ex)
         {
