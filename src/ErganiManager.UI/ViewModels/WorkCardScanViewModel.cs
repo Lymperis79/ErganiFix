@@ -26,6 +26,7 @@ public class ScanResultRow
 
     public string ErrorDescription { get; init; } = string.Empty;
 
+
     public string TimeText =>
         ScannedAt.ToString("HH:mm:ss");
 
@@ -46,6 +47,7 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
     private readonly IWorkCardSubmitter _workCardSubmitter;
     private readonly IConnectionStateService _connectionState;
 
+    private readonly ICompanyService _companyService;
     private UserSession? _session;
 
     /*
@@ -60,6 +62,14 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
     private readonly Dictionary<string, DateTime> _lastScanTime = new();
 
     public ObservableCollection<ScanResultRow> RecentScans { get; } = new();
+
+    public ObservableCollection<CompanyDto> AvailableCompanies { get; } = new();
+
+    [ObservableProperty]
+    private CompanyDto? _selectedCompany;
+
+    [ObservableProperty]
+    private bool _canChangeCompany;
 
     /*
      * Ergani f_aitiologia codes.
@@ -141,11 +151,13 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
     private string? _retryAitiologia;
 
     public WorkCardScanViewModel(
-        IWorkCardSubmitter workCardSubmitter,
-        IConnectionStateService connectionState)
+    IWorkCardSubmitter workCardSubmitter,
+    IConnectionStateService connectionState,
+    ICompanyService companyService)
     {
         _workCardSubmitter = workCardSubmitter;
         _connectionState = connectionState;
+        _companyService = companyService;
     }
 
     public void Initialize(UserSession session)
