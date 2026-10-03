@@ -39,12 +39,12 @@ public class ErganiApiService : IWorkCardSubmitter
     /// carries IDs), builds the Ergani payload, submits, and writes a new
     /// WorkCard + ApiSubmissionLog row reflecting the outcome.
     /// </summary>
-    public async Task<WorkCardSubmissionOutcome> SubmitAsync(WorkCardSubmissionRequest request, string aitiologia = "")
+    public async Task<WorkCardSubmissionOutcome> SubmitAsync(WorkCardSubmissionRequest request, string? aitiologia = null)
     {
         var config = _connectionState.LoadConfig();
         if (config == null)
             return new WorkCardSubmissionOutcome { Success = false, ErrorMessage = "Database not configured." };
-
+        aitiologia ??= string.Empty;
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         DbProviderFactory.Configure(optionsBuilder, config);
 
