@@ -8,7 +8,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace ErganiManager.UI.ViewModels;
 
@@ -16,25 +18,32 @@ public class ScanResultRow
 {
     public DateTime ScannedAt { get; init; }
 
-    public string EmployeeName { get; init; } = string.Empty;
+    public string EmployeeName { get; init; } =
+        string.Empty;
 
-    public string MovementType { get; init; } = string.Empty;
+    public string MovementType { get; init; } =
+        string.Empty;
 
     public bool Success { get; init; }
 
-    public string Protocol { get; init; } = string.Empty;
+    public string Protocol { get; init; } =
+        string.Empty;
 
-    public string ErrorDescription { get; init; } = string.Empty;
-
+    public string ErrorDescription { get; init; } =
+        string.Empty;
 
     public string TimeText =>
         ScannedAt.ToString("HH:mm:ss");
 
     public string MovementIcon =>
-        MovementType == "Arrival" ? "🟢" : "🔴";
+        MovementType == "Arrival"
+            ? "🟢"
+            : "🔴";
 
     public string StatusIcon =>
-        Success ? "✅" : "❌";
+        Success
+            ? "✅"
+            : "❌";
 
     public string StatusText =>
         Success
@@ -42,12 +51,31 @@ public class ScanResultRow
             : ErrorDescription;
 }
 
-public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewModel
+/// <summary>
+/// Parsed data from an Ergani scanner string such as:
+///
+/// ergInm:ΑΡΙΣΤΕΙΔΗΣ;In:NIZAMΗΣ;afm:038311286;id:106393
+/// </summary>
+public sealed class ErganiScanData
+{
+    public string? ErgInm { get; init; }
+
+    public string? In { get; init; }
+
+    public string? Afm { get; init; }
+
+    public string? Id { get; init; }
+}
+
+public partial class WorkCardScanViewModel :
+    ViewModelBase,
+    IAdminSectionViewModel
 {
     private readonly IWorkCardSubmitter _workCardSubmitter;
     private readonly IConnectionStateService _connectionState;
-
     private readonly ICompanyService _companyService;
+    private readonly ICompanyContext _companyContext;
+
     private UserSession? _session;
 
     /*
@@ -59,15 +87,24 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
     private static readonly TimeSpan ScanCooldown =
         TimeSpan.FromSeconds(20);
 
-    private readonly Dictionary<string, DateTime> _lastScanTime = new();
+    private readonly Dictionary<string, DateTime> _lastScanTime =
+        new();
 
-    public ObservableCollection<ScanResultRow> RecentScans { get; } = new();
+    public ObservableCollection<ScanResultRow> RecentScans { get; } =
+        new();
 
-    public ObservableCollection<CompanyDto> AvailableCompanies { get; } = new();
+    public ObservableCollection<CompanyDto> AvailableCompanies { get; } =
+        new();
 
     [ObservableProperty]
     private CompanyDto? _selectedCompany;
 
+    /*
+     * The main AdminShell is the source of truth for the company.
+     *
+     * Therefore the scan window displays the selected company but
+     * does not independently switch companies.
+     */
     [ObservableProperty]
     private bool _canChangeCompany;
 
@@ -77,8 +114,6 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
      * 001 = Problem with electricity / telecommunications
      * 002 = Problem with employer systems
      * 003 = Problem connecting to ERGANI
-     *
-     * The API expects the code itself, not the description.
      */
     public ObservableCollection<string> AvailableAitiologiai { get; } =
         new()
@@ -92,10 +127,12 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
     private bool _hasActiveCompany;
 
     [ObservableProperty]
-    private string _noCompanyMessage = string.Empty;
+    private string _noCompanyMessage =
+        string.Empty;
 
     [ObservableProperty]
-    private string _barcodeInput = string.Empty;
+    private string _barcodeInput =
+        string.Empty;
 
     [ObservableProperty]
     private bool _isArrival = true;
@@ -111,7 +148,8 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
      * Only used when AutoDetect = false.
      */
     [ObservableProperty]
-    private DateTimeOffset? _movementDate = DateTimeOffset.Now;
+    private DateTimeOffset? _movementDate =
+        DateTimeOffset.Now;
 
     [ObservableProperty]
     private TimeSpan? _movementTime =
@@ -121,10 +159,12 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
      * Normal response
      */
     [ObservableProperty]
-    private string _responseTitle = string.Empty;
+    private string _responseTitle =
+        string.Empty;
 
     [ObservableProperty]
-    private string _responseDetail = string.Empty;
+    private string _responseDetail =
+        string.Empty;
 
     [ObservableProperty]
     private bool _responseSuccess;
@@ -139,10 +179,12 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
     private bool _isRetryDialogOpen;
 
     [ObservableProperty]
-    private string _retryEmployeeName = string.Empty;
+    private string _retryEmployeeName =
+        string.Empty;
 
     [ObservableProperty]
-    private string _retryMovementType = string.Empty;
+    private string _retryMovementType =
+        string.Empty;
 
     [ObservableProperty]
     private DateTime _retryDateTime;
@@ -151,30 +193,500 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
     private string? _retryAitiologia;
 
     public WorkCardScanViewModel(
-    IWorkCardSubmitter workCardSubmitter,
-    IConnectionStateService connectionState,
-    ICompanyService companyService)
+        IWorkCardSubmitter workCardSubmitter,
+        IConnectionStateService connectionState,
+        ICompanyService companyService,
+        ICompanyContext companyContext)
     {
         _workCardSubmitter = workCardSubmitter;
         _connectionState = connectionState;
         _companyService = companyService;
+        _companyContext = companyContext;
+
+        /*
+         * If the company is changed from the main AdminShell,
+         * immediately update the company displayed in this window.
+         */
+        _companyContext.CompanyChanged +=
+            OnCompanyContextChanged;
     }
 
     public void Initialize(UserSession session)
     {
+        /*
+         * The AdminShell passes a company-scoped session here.
+         */
         _session = session;
 
-        HasActiveCompany = session.CompanyId.HasValue;
+        var companyId =
+            session.CompanyId ??
+            _companyContext.ActiveCompanyId;
 
-        NoCompanyMessage = session.CompanyId.HasValue
-            ? string.Empty
-            : "Select a company first.";
+        HasActiveCompany =
+            companyId.HasValue;
+
+        NoCompanyMessage =
+            companyId.HasValue
+                ? string.Empty
+                : "Select a company first.";
+
+        /*
+         * The company ComboBox is a display of the main
+         * window's selected company.
+         */
+        CanChangeCompany = false;
+
+        /*
+         * Load the company list asynchronously.
+         */
+        _ = LoadCompaniesAsync(companyId);
     }
+
+    private async Task LoadCompaniesAsync(
+        int? selectedCompanyId)
+    {
+        try
+        {
+            var companies =
+                await _companyService
+                    .GetAllAsync()
+                    .ConfigureAwait(false);
+
+            var activeCompanies =
+                companies
+                    .Where(c => c.IsActive)
+                    .ToList();
+
+            await Avalonia.Threading.Dispatcher.UIThread
+                .InvokeAsync(() =>
+                {
+                    AvailableCompanies.Clear();
+
+                    foreach (var company in activeCompanies)
+                    {
+                        AvailableCompanies.Add(company);
+                    }
+
+                    /*
+                     * First priority:
+                     * company passed by the AdminShell.
+                     */
+                    if (selectedCompanyId.HasValue)
+                    {
+                        SelectedCompany =
+                            AvailableCompanies.FirstOrDefault(
+                                c => c.Id ==
+                                     selectedCompanyId.Value);
+                    }
+
+                    /*
+                     * Second priority:
+                     * currently active company in ICompanyContext.
+                     */
+                    if (SelectedCompany == null)
+                    {
+                        var activeId =
+                            _companyContext.ActiveCompanyId;
+
+                        if (activeId.HasValue)
+                        {
+                            SelectedCompany =
+                                AvailableCompanies.FirstOrDefault(
+                                    c => c.Id == activeId.Value);
+                        }
+                    }
+
+                    /*
+                     * If there is exactly one active company,
+                     * show it automatically.
+                     */
+                    if (SelectedCompany == null &&
+                        AvailableCompanies.Count == 1)
+                    {
+                        SelectedCompany =
+                            AvailableCompanies[0];
+                    }
+
+                    HasActiveCompany =
+                        SelectedCompany != null;
+
+                    NoCompanyMessage =
+                        SelectedCompany != null
+                            ? string.Empty
+                            : "Select a company first.";
+                });
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(
+                ex,
+                "Failed to load companies for barcode scan window");
+
+            await Avalonia.Threading.Dispatcher.UIThread
+                .InvokeAsync(() =>
+                {
+                    AvailableCompanies.Clear();
+                    SelectedCompany = null;
+                    HasActiveCompany = false;
+
+                    NoCompanyMessage =
+                        "Unable to load companies.";
+                });
+        }
+    }
+
+    private void OnCompanyContextChanged(
+        object? sender,
+        EventArgs e)
+    {
+        var companyId =
+            _companyContext.ActiveCompanyId;
+
+        if (!companyId.HasValue)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                SelectedCompany = null;
+                HasActiveCompany = false;
+                NoCompanyMessage =
+                    "Select a company first.";
+            });
+
+            return;
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var company =
+                AvailableCompanies.FirstOrDefault(
+                    c => c.Id == companyId.Value);
+
+            if (company == null)
+            {
+                /*
+                 * The company list may still be loading.
+                 * Load it again.
+                 */
+                _ = LoadCompaniesAsync(companyId);
+                return;
+            }
+
+            SelectedCompany = company;
+            HasActiveCompany = true;
+            NoCompanyMessage = string.Empty;
+
+            /*
+             * Keep the session used by this window synchronized
+             * with the main window.
+             */
+            if (_session != null)
+            {
+                _session =
+                    new UserSession
+                    {
+                        UserId = _session.UserId,
+                        Username = _session.Username,
+                        Role = _session.Role,
+
+                        CompanyId = company.Id,
+                        CompanyName = company.Name,
+
+                        BranchId = null,
+                        BranchName = null,
+
+                        IsOfflineSession =
+                            _session.IsOfflineSession
+                    };
+            }
+        });
+    }
+
+    partial void OnSelectedCompanyChanged(
+        CompanyDto? value)
+    {
+        HasActiveCompany =
+            value != null;
+
+        NoCompanyMessage =
+            value != null
+                ? string.Empty
+                : "Select a company first.";
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // SCAN PARSING
+    // ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Accepts:
+    ///
+    /// 038311286
+    ///
+    /// or:
+    ///
+    /// ergInm:ΑΡΙΣΤΕΙΔΗΣ;In:NIZAMΗΣ;afm:038311286;id:106393
+    ///
+    /// Returns the normalized AFM when the input represents an AFM.
+    /// </summary>
+    private static string? ExtractAfm(
+        string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        var value =
+            input.Trim();
+
+        /*
+         * Plain AFM.
+         */
+        if (IsValidAfm(value))
+            return value;
+
+        /*
+         * Ergani scanner format.
+         */
+        var parsed =
+            ParseErganiScanString(value);
+
+        if (parsed == null)
+            return null;
+
+        if (IsValidAfm(parsed.Afm))
+            return parsed.Afm;
+
+        return null;
+    }
+
+    private static bool IsValidAfm(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var digits =
+            new string(
+                value
+                    .Where(char.IsDigit)
+                    .ToArray());
+
+        return digits.Length == 9;
+    }
+
+    /// <summary>
+    /// Parses the scanner string:
+    ///
+    /// ergInm:ΑΡΙΣΤΕΙΔΗΣ;
+    /// In:NIZAMΗΣ;
+    /// afm:038311286;
+    /// id:106393
+    ///
+    /// into a small strongly typed object.
+    /// </summary>
+    private static ErganiScanData? ParseErganiScanString(
+        string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        if (!input.Contains(':'))
+            return null;
+
+        var values =
+            new Dictionary<string, string>(
+                StringComparer.OrdinalIgnoreCase);
+
+        var parts =
+            input.Split(
+                ';',
+                StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var part in parts)
+        {
+            var separator =
+                part.IndexOf(':');
+
+            if (separator <= 0)
+                continue;
+
+            var key =
+                part[..separator]
+                    .Trim();
+
+            var value =
+                part[(separator + 1)..]
+                    .Trim();
+
+            if (string.IsNullOrWhiteSpace(key))
+                continue;
+
+            values[key] = value;
+        }
+
+        if (values.Count == 0)
+            return null;
+
+        values.TryGetValue(
+            "ergInm",
+            out var ergInm);
+
+        values.TryGetValue(
+            "In",
+            out var firstName);
+
+        values.TryGetValue(
+            "afm",
+            out var afm);
+
+        values.TryGetValue(
+            "id",
+            out var id);
+
+        /*
+         * If there is no AFM at all, this is not an Ergani
+         * employee string for our purposes.
+         */
+        if (string.IsNullOrWhiteSpace(afm))
+            return null;
+
+        return new ErganiScanData
+        {
+            ErgInm = ergInm,
+            In = firstName,
+            Afm = NormalizeAfm(afm),
+            Id = id
+        };
+    }
+
+    private static string? NormalizeAfm(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var digits =
+            new string(
+                value
+                    .Where(char.IsDigit)
+                    .ToArray());
+
+        if (digits.Length != 9)
+            return null;
+
+        /*
+         * Preserve leading zeroes.
+         */
+        return digits.PadLeft(9, '0');
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // EMPLOYEE AFM LOOKUP
+    // ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads the employee AFM from CachedEmployee without hard-coding
+    /// the property name.
+    ///
+    /// This supports common names used by the cache model:
+    ///
+    /// TaxId
+    /// Afm
+    /// AFM
+    /// TaxIdentificationNumber
+    /// EmployeeTaxId
+    /// ErganiAfm
+    /// </summary>
+    private static string? GetEmployeeAfm(
+        CachedEmployee employee)
+    {
+        var type =
+            typeof(CachedEmployee);
+
+        var preferredNames =
+            new[]
+            {
+                "TaxId",
+                "TaxID",
+                "Afm",
+                "AFM",
+                "TaxIdentificationNumber",
+                "EmployeeTaxId",
+                "EmployeeAfm",
+                "ErganiAfm"
+            };
+
+        foreach (var name in preferredNames)
+        {
+            var property =
+                type.GetProperty(
+                    name,
+                    BindingFlags.Public |
+                    BindingFlags.Instance |
+                    BindingFlags.IgnoreCase);
+
+            if (property == null)
+                continue;
+
+            if (property.PropertyType != typeof(string))
+                continue;
+
+            var value =
+                property.GetValue(employee) as string;
+
+            var afm =
+                NormalizeAfm(value);
+
+            if (afm != null)
+                return afm;
+        }
+
+        /*
+         * Fallback:
+         * look for a string property whose name contains
+         * AFM or Tax.
+         */
+        var fallback =
+            type.GetProperties(
+                    BindingFlags.Public |
+                    BindingFlags.Instance)
+                .FirstOrDefault(
+                    p =>
+                        p.PropertyType == typeof(string) &&
+                        (
+                            p.Name.Contains(
+                                "Afm",
+                                StringComparison.OrdinalIgnoreCase) ||
+                            p.Name.Contains(
+                                "Tax",
+                                StringComparison.OrdinalIgnoreCase)
+                        ));
+
+        if (fallback != null)
+        {
+            var value =
+                fallback.GetValue(employee) as string;
+
+            return NormalizeAfm(value);
+        }
+
+        return null;
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // SCAN SUBMISSION
+    // ────────────────────────────────────────────────────────────────────────
 
     [RelayCommand]
     private async Task SubmitScanAsync()
     {
-        if (_session?.CompanyId is not int companyId)
+        /*
+         * Always use the company selected in the main shell/context.
+         */
+        var companyId =
+            SelectedCompany?.Id ??
+            _companyContext.ActiveCompanyId;
+
+        if (!companyId.HasValue)
         {
             ShowResponse(
                 false,
@@ -184,28 +696,65 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
             return;
         }
 
-        var barcode = BarcodeInput.Trim();
+        var scanValue =
+            BarcodeInput.Trim();
 
-        if (string.IsNullOrEmpty(barcode))
+        if (string.IsNullOrWhiteSpace(scanValue))
             return;
+
+        /*
+         * Determine whether the input is:
+         *
+         * 1. plain AFM
+         * 2. Ergani serialized string containing AFM
+         * 3. barcode
+         */
+        var afm =
+            ExtractAfm(scanValue);
+
+        var isAfmScan =
+            afm != null;
+
+        /*
+         * Use the normalized AFM as the cooldown key.
+         *
+         * This means:
+         *
+         * 038311286
+         *
+         * and
+         *
+         * ergInm:...;afm:038311286;...
+         *
+         * are considered the same employee scan.
+         */
+        var cooldownKey =
+            isAfmScan
+                ? $"AFM:{afm}"
+                : $"BARCODE:{scanValue}";
 
         /*
          * Prevent accidental duplicate scans.
          */
-        if (_lastScanTime.TryGetValue(barcode, out var lastTime))
+        if (_lastScanTime.TryGetValue(
+                cooldownKey,
+                out var lastTime))
         {
-            var elapsed = DateTime.Now - lastTime;
+            var elapsed =
+                DateTime.Now - lastTime;
 
             if (elapsed < ScanCooldown)
             {
                 var remaining =
                     (int)Math.Ceiling(
-                        (ScanCooldown - elapsed).TotalSeconds);
+                        (ScanCooldown - elapsed)
+                            .TotalSeconds);
 
                 ShowResponse(
                     false,
                     "⏳ Already Scanned",
-                    $"This badge was scanned {(int)elapsed.TotalSeconds}s ago.\n" +
+                    $"This employee was scanned " +
+                    $"{(int)elapsed.TotalSeconds}s ago.\n" +
                     $"Please wait {remaining} more second(s).");
 
                 BarcodeInput = string.Empty;
@@ -219,24 +768,37 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
 
         try
         {
-            /*
-             * Resolve employee from local cache.
-             */
-            using var cache =
-                LocalCacheDbContextFactory.Create();
+            CachedEmployee? employee = null;
+            using var cache = LocalCacheDbContextFactory.Create();
+            
 
-            var employee = cache.CachedEmployees
-                .FirstOrDefault(e =>
-                    e.CompanyId == companyId &&
-                    e.BarcodeId == barcode &&
+            // Restore the original barcode lookup.
+            // This preserves the scan behavior that was working before.
+            employee = await cache.CachedEmployees
+                .FirstOrDefaultAsync(e =>
+                    e.CompanyId == companyId.Value &&
+                    e.BarcodeId == scanValue &&
                     e.IsActive);
 
             if (employee == null)
             {
-                ShowResponse(
-                    false,
-                    "Unknown Badge",
-                    $"No active employee found with barcode '{barcode}'.");
+                if (isAfmScan)
+                {
+                    ShowResponse(
+                        false,
+                        "Unknown Employee",
+                        $"No active employee found " +
+                        $"with AFM '{afm}' " +
+                        $"for the selected company.");
+                }
+                else
+                {
+                    ShowResponse(
+                        false,
+                        "Unknown Badge",
+                        $"No active employee found " +
+                        $"with barcode '{scanValue}'.");
+                }
 
                 return;
             }
@@ -249,19 +811,25 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
 
             if (AutoDetect)
             {
-                var lastPending = cache.PendingSubmissions
-                    .Where(p =>
-                        p.EmployeeId == employee.Id &&
-                        p.Synced)
-                    .OrderByDescending(p => p.ScannedAt)
-                    .FirstOrDefault();
+                var lastPending =
+                    cache.PendingSubmissions
+                        .Where(
+                            p =>
+                                p.EmployeeId ==
+                                    employee.Id &&
+                                p.Synced)
+                        .OrderByDescending(
+                            p => p.ScannedAt)
+                        .FirstOrDefault();
 
                 movement =
-                    lastPending?.MovementType == "Arrival"
+                    lastPending?.MovementType ==
+                        "Arrival"
                         ? "Departure"
                         : "Arrival";
 
-                scanTime = DateTime.Now;
+                scanTime =
+                    DateTime.Now;
             }
             else
             {
@@ -271,7 +839,10 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
                         : "Departure";
 
                 var date =
-                    (MovementDate ?? DateTimeOffset.Now)
+                    (
+                        MovementDate ??
+                        DateTimeOffset.Now
+                    )
                     .LocalDateTime
                     .Date;
 
@@ -279,62 +850,93 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
                     MovementTime ??
                     DateTime.Now.TimeOfDay;
 
-                scanTime = date + time;
+                scanTime =
+                    date + time;
             }
 
             /*
              * Build request once.
              *
-             * We keep this same request if the submission fails
-             * and the user chooses Retry.
+             * This same request is reused when Retry is selected.
              */
-            var request = new WorkCardSubmissionRequest
-            {
-                EmployeeId = employee.Id,
-                CompanyId = companyId,
-                BranchId = employee.BranchId,
-                MovementType = movement,
-                MovementDateTime = scanTime
-            };
+            var request =
+                new WorkCardSubmissionRequest
+                {
+                    EmployeeId =
+                        employee.Id,
+
+                    CompanyId =
+                        companyId.Value,
+
+                    BranchId =
+                        employee.BranchId,
+
+                    MovementType =
+                        movement,
+
+                    MovementDateTime =
+                        scanTime
+                };
 
             var result =
-                await _workCardSubmitter.SubmitAsync(request);
+                await _workCardSubmitter
+                    .SubmitAsync(request);
 
-            var name = employee.FullName;
+            var name =
+                employee.FullName;
 
             if (result.Success)
             {
                 /*
-                 * Store the successful scan in the local cache.
-                 *
-                 * This is important because PendingSubmissions is also used
-                 * to determine the next movement (Arrival / Departure).
-                 *
-                 * A successful scan is kept in the cache as history and marked
-                 * as already synchronized.
+                 * Store successful scan in local cache.
                  */
+                var successfulSubmission =
+                    new PendingSubmission
+                    {
+                        EmployeeId =
+                            employee.Id,
 
-                var successfulSubmission = new PendingSubmission
-                {
-                    EmployeeId = employee.Id,
-                    CompanyId = companyId,
-                    BranchId = employee.BranchId,
-                    EmployeeBarcodeId = employee.BarcodeId,
-                    MovementType = movement,
-                    ScannedAt = scanTime,
-                    Synced = true,
-                    SyncedAt = DateTime.UtcNow,
-                    SyncAttempts = 0,
-                    LastSyncError = null
-                };
+                        CompanyId =
+                            companyId.Value,
 
-                cache.PendingSubmissions.Add(successfulSubmission);
+                        BranchId =
+                            employee.BranchId,
+
+                        EmployeeBarcodeId =
+                            employee.BarcodeId,
+
+                        MovementType =
+                            movement,
+
+                        ScannedAt =
+                            scanTime,
+
+                        Synced =
+                            true,
+
+                        SyncedAt =
+                            DateTime.UtcNow,
+
+                        SyncAttempts =
+                            0,
+
+                        LastSyncError =
+                            null
+                    };
+
+                cache.PendingSubmissions.Add(
+                    successfulSubmission);
+
                 cache.SaveChanges();
+
+                var protocol =
+                    result.Protocol ??
+                    string.Empty;
 
                 ShowResponse(
                     true,
                     $"✅ {movement.ToUpper()} — {name}",
-                    $"Protocol:      {result.Protocol}\n" +
+                    $"Protocol:      {protocol}\n" +
                     $"Submission ID: {result.SubmissionId}\n" +
                     $"Time:          {scanTime:HH:mm:ss dd/MM/yyyy}");
 
@@ -342,17 +944,22 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
                     0,
                     new ScanResultRow
                     {
-                        ScannedAt = scanTime,
-                        EmployeeName = name,
-                        MovementType = movement,
-                        Success = true,
+                        ScannedAt =
+                            scanTime,
+
+                        EmployeeName =
+                            name,
+
+                        MovementType =
+                            movement,
+
+                        Success =
+                            true,
+
                         Protocol =
-                            result.Protocol ?? string.Empty
+                            protocol
                     });
 
-                /*
-                 * Successful scan — clear any previous retry state.
-                 */
                 ClearRetryState();
             }
             else
@@ -370,11 +977,20 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
                     0,
                     new ScanResultRow
                     {
-                        ScannedAt = scanTime,
-                        EmployeeName = name,
-                        MovementType = movement,
-                        Success = false,
-                        ErrorDescription = error
+                        ScannedAt =
+                            scanTime,
+
+                        EmployeeName =
+                            name,
+
+                        MovementType =
+                            movement,
+
+                        Success =
+                            false,
+
+                        ErrorDescription =
+                            error
                     });
 
                 /*
@@ -388,12 +1004,16 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
             }
 
             while (RecentScans.Count > 50)
+            {
                 RecentScans.RemoveAt(
                     RecentScans.Count - 1);
+            }
 
-            _lastScanTime[barcode] = DateTime.Now;
+            _lastScanTime[cooldownKey] =
+                DateTime.Now;
 
-            BarcodeInput = string.Empty;
+            BarcodeInput =
+                string.Empty;
         }
         catch (Exception ex)
         {
@@ -408,92 +1028,95 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
         }
     }
 
-    /*
-     * Opens the retry dialog after a failed submission.
-     */
+    // ────────────────────────────────────────────────────────────────────────
+    // RETRY
+    // ────────────────────────────────────────────────────────────────────────
+
     private void OpenRetryDialog(
         WorkCardSubmissionRequest request,
         string employeeName,
         string movementType,
         DateTime movementDateTime)
     {
-        _retryRequest = request;
+        _retryRequest =
+            request;
 
-        RetryEmployeeName = employeeName;
-        RetryMovementType = movementType;
-        RetryDateTime = movementDateTime;
+        RetryEmployeeName =
+            employeeName;
 
-        /*
-         * Default to the first valid reason.
-         */
+        RetryMovementType =
+            movementType;
+
+        RetryDateTime =
+            movementDateTime;
+
         RetryAitiologia =
-            AvailableAitiologiai.FirstOrDefault();
+            AvailableAitiologiai
+                .FirstOrDefault();
 
-        IsRetryDialogOpen = true;
+        IsRetryDialogOpen =
+            true;
     }
 
-    /*
-     * Cancel retry.
-     */
     [RelayCommand]
     private void CloseRetryDialog()
     {
         ClearRetryState();
     }
 
-    /*
-     * Retry the exact failed work-card submission,
-     * now with f_aitiologia.
-     */
     [RelayCommand]
     private async Task SubmitRetryAsync()
     {
         if (_retryRequest == null)
         {
-            IsRetryDialogOpen = false;
+            IsRetryDialogOpen =
+                false;
 
             ShowResponse(
                 false,
                 "Retry Error",
-                "There is no failed submission available to retry.");
+                "There is no failed submission " +
+                "available to retry.");
 
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(RetryAitiologia))
+        if (string.IsNullOrWhiteSpace(
+                RetryAitiologia))
         {
             ShowResponse(
                 false,
                 "Reason Required",
-                "Please select an Ergani justification code.");
+                "Please select an Ergani " +
+                "justification code.");
 
             return;
         }
 
-        IsProcessing = true;
+        IsProcessing =
+            true;
 
         try
         {
-            var request = _retryRequest;
+            var request =
+                _retryRequest;
 
-            /*
-             * IWorkCardSubmitter already supports:
-             *
-             * SubmitAsync(request, aitiologia)
-             */
             var result =
-                await _workCardSubmitter.SubmitAsync(
-                    request,
-                    RetryAitiologia);
+                await _workCardSubmitter
+                    .SubmitAsync(
+                        request,
+                        RetryAitiologia);
 
             if (result.Success)
             {
                 ShowResponse(
                     true,
-                    $"✅ Retry Successful — {RetryEmployeeName}",
+                    $"✅ Retry Successful — " +
+                    $"{RetryEmployeeName}",
                     $"Protocol:      {result.Protocol}\n" +
                     $"Submission ID: {result.SubmissionId}\n" +
-                    $"Time:          {request.MovementDateTime:HH:mm:ss dd/MM/yyyy}\n" +
+                    $"Time:          " +
+                    $"{request.MovementDateTime:HH:mm:ss dd/MM/yyyy}\n" +
                     $"Reason:        {RetryAitiologia}");
 
                 RecentScans.Insert(
@@ -509,7 +1132,8 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
                         MovementType =
                             RetryMovementType,
 
-                        Success = true,
+                        Success =
+                            true,
 
                         Protocol =
                             result.Protocol ??
@@ -517,8 +1141,10 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
                     });
 
                 while (RecentScans.Count > 50)
+                {
                     RecentScans.RemoveAt(
                         RecentScans.Count - 1);
+                }
 
                 ClearRetryState();
             }
@@ -530,14 +1156,12 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
 
                 ShowResponse(
                     false,
-                    $"❌ Retry Failed — {RetryEmployeeName}",
+                    $"❌ Retry Failed — " +
+                    $"{RetryEmployeeName}",
                     error);
 
-                /*
-                 * Keep the retry dialog open so the user can
-                 * select another reason and try again.
-                 */
-                IsRetryDialogOpen = true;
+                IsRetryDialogOpen =
+                    true;
             }
         }
         catch (Exception ex)
@@ -547,42 +1171,67 @@ public partial class WorkCardScanViewModel : ViewModelBase, IAdminSectionViewMod
                 "Retry Error",
                 ex.Message);
 
-            IsRetryDialogOpen = true;
+            IsRetryDialogOpen =
+                true;
         }
         finally
         {
-            IsProcessing = false;
+            IsProcessing =
+                false;
         }
     }
 
     private void ClearRetryState()
     {
-        _retryRequest = null;
+        _retryRequest =
+            null;
 
-        RetryEmployeeName = string.Empty;
-        RetryMovementType = string.Empty;
-        RetryDateTime = default;
-        RetryAitiologia = null;
+        RetryEmployeeName =
+            string.Empty;
 
-        IsRetryDialogOpen = false;
+        RetryMovementType =
+            string.Empty;
+
+        RetryDateTime =
+            default;
+
+        RetryAitiologia =
+            null;
+
+        IsRetryDialogOpen =
+            false;
     }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // RESPONSE / HISTORY
+    // ────────────────────────────────────────────────────────────────────────
 
     private void ShowResponse(
         bool success,
         string title,
         string detail)
     {
-        ResponseSuccess = success;
-        ResponseTitle = title;
-        ResponseDetail = detail;
-        HasResponse = true;
+        ResponseSuccess =
+            success;
+
+        ResponseTitle =
+            title;
+
+        ResponseDetail =
+            detail;
+
+        HasResponse =
+            true;
     }
 
     [RelayCommand]
     private void ClearResponse()
     {
-        HasResponse = false;
-        BarcodeInput = string.Empty;
+        HasResponse =
+            false;
+
+        BarcodeInput =
+            string.Empty;
     }
 
     [RelayCommand]
