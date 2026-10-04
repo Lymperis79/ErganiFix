@@ -109,6 +109,9 @@ public class ConnectionStateService : IConnectionStateService
             // A SqlException/MySqlException about the table not existing tells us
             // the schema is broken.
             _ = await db.Companies.AnyAsync();
+
+            // Add any columns introduced after the first release (EnsureCreated won't).
+            await DbSchemaUpdater.EnsureUpToDateAsync(config);
             return true;
         }
         catch (Exception)
