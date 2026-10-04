@@ -201,6 +201,37 @@
                     VerticalAlignment="Bottom"
                     Margin="0,0,0,5" />
 
+            <!-- Select all failed -->
+
+            <Button Content="{Binding Loc[SelectAllFailed]}"
+                    Command="{Binding SelectAllFailedCommand}"
+                    VerticalAlignment="Bottom"
+                    Margin="18,0,0,5" />
+
+            <!-- f_aitiologia used when the first attempt was more than 10 min ago -->
+
+            <StackPanel Margin="18,0,0,0"
+                        Spacing="5"
+                        ToolTip.Tip="Sent as f_aitiologia when the first attempt was more than 10 minutes ago. Within 10 minutes it is sent empty.">
+
+                <TextBlock Text="Late reason (&gt;10 min):"
+                           FontSize="12"
+                           Foreground="Gray" />
+
+                <ComboBox ItemsSource="{Binding LateJustificationCodes}"
+                          SelectedItem="{Binding SelectedLateJustification, Mode=TwoWay}"
+                          MinWidth="90" />
+
+            </StackPanel>
+
+            <!-- Retry selected -->
+
+            <Button Content="{Binding RetrySelectedText}"
+                    Command="{Binding RetrySelectedCommand}"
+                    Classes="accent"
+                    VerticalAlignment="Bottom"
+                    Margin="8,0,0,5" />
+
         </WrapPanel>
 
         <!-- Status -->
@@ -254,11 +285,33 @@
                                     Background="#1A1D23"
                                     Cursor="Hand">
 
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto">
+
+                                    <!-- Retry tick box (failed work cards only) -->
+
+                                    <Border Grid.Column="0"
+                                            Width="32"
+                                            VerticalAlignment="Center">
+
+                                        <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                  IsVisible="{Binding CanRetry}" />
+
+                                    </Border>
+
+                                    <!-- Retry counter -->
+
+                                    <TextBlock Grid.Column="3"
+                                               Text="{Binding RetryText}"
+                                               IsVisible="{Binding HasRetries}"
+                                               VerticalAlignment="Center"
+                                               Margin="8,0"
+                                               Foreground="#F2C94C"
+                                               FontSize="12"
+                                               ToolTip.Tip="{Binding LastRetryText}" />
 
                                     <!-- Status icon -->
 
-                                    <TextBlock Grid.Column="0"
+                                    <TextBlock Grid.Column="1"
                                                Width="24"
                                                FontSize="15"
                                                VerticalAlignment="Center"
@@ -266,7 +319,7 @@
 
                                     <!-- Type + date -->
 
-                                    <StackPanel Grid.Column="1"
+                                    <StackPanel Grid.Column="2"
                                                 VerticalAlignment="Center"
                                                 Margin="8,0">
 
@@ -284,7 +337,7 @@
 
                                     <!-- HTTP status -->
 
-                                    <TextBlock Grid.Column="2"
+                                    <TextBlock Grid.Column="4"
                                                Text="{Binding HttpStatusCode}"
                                                VerticalAlignment="Center"
                                                Margin="8,0"
@@ -293,7 +346,7 @@
 
                                     <!-- Duration -->
 
-                                    <TextBlock Grid.Column="3"
+                                    <TextBlock Grid.Column="5"
                                                Text="{Binding DurationMs,
                                                               StringFormat='{}{0} ms'}"
                                                VerticalAlignment="Center"
@@ -303,7 +356,7 @@
 
                                     <!-- Protocol -->
 
-                                    <TextBlock Grid.Column="4"
+                                    <TextBlock Grid.Column="6"
                                                Text="{Binding Protocol}"
                                                VerticalAlignment="Center"
                                                Foreground="#2D9CDB"
@@ -349,6 +402,11 @@
                                FontSize="12"
                                IsVisible="{Binding SelectedRow.ErrorMessage,
                                    Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                    <TextBlock Text="{Binding SelectedRow.RetrySummary}"
+                               Foreground="#F2C94C"
+                               FontSize="12"
+                               IsVisible="{Binding SelectedRow.HasRetries}" />
 
                     <TextBlock Text="{Binding Loc[RequestPayload]}"
                                FontWeight="SemiBold"

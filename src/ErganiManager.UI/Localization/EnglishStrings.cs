@@ -29,6 +29,8 @@ public static class EnglishStrings
         [L.Search]              = "Search",
         [L.Refresh]             = "Refresh",
         [L.RetryNow]            = "⚡ Retry Now",
+        [L.RetrySelected]       = "⚡ Retry selected",
+        [L.SelectAllFailed]     = "Select all failed",
         [L.TestConnection]      = "Test Connection",
 
         // ── Auth / Login ──────────────────────────────────────

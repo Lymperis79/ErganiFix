@@ -25,6 +25,8 @@ public static class L
     public const string Search          = nameof(Search);
     public const string Refresh         = nameof(Refresh);
     public const string RetryNow        = nameof(RetryNow);
+    public const string RetrySelected   = nameof(RetrySelected);
+    public const string SelectAllFailed = nameof(SelectAllFailed);
     public const string TestConnection  = nameof(TestConnection);
 
     // Auth / Login

@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ErganiManager.Core.Interfaces;
 using ErganiManager.Core.Models;
+using ErganiManager.ErganiApi.Services;
 using ErganiManager.LocalCache;
 using ErganiManager.LocalCache.Entities;
 using System;
@@ -14,7 +15,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ErganiManager.UI.ViewModels;
 
-public class ScanResultRow
+public partial class ScanResultRow : ObservableObject
 {
     public DateTime ScannedAt { get; init; }
 
@@ -24,13 +25,27 @@ public class ScanResultRow
     public string MovementType { get; init; } =
         string.Empty;
 
-    public bool Success { get; init; }
+    /// <summary>Id of the locally queued scan this row stands for (null if it was never queued).</summary>
+    public int? PendingId { get; init; }
 
-    public string Protocol { get; init; } =
-        string.Empty;
+    /// <summary>True while the scan is still waiting to be delivered to Ergani.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusIcon))]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private bool _isPending;
 
-    public string ErrorDescription { get; init; } =
-        string.Empty;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusIcon))]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private bool _success;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private string _protocol = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private string _errorDescription = string.Empty;
 
     public string TimeText =>
         ScannedAt.ToString("HH:mm:ss");
@@ -41,14 +56,20 @@ public class ScanResultRow
             : "🔴";
 
     public string StatusIcon =>
-        Success
-            ? "✅"
-            : "❌";
+        IsPending
+            ? "⏳"
+            : Success
+                ? "✅"
+                : "❌";
 
     public string StatusText =>
-        Success
-            ? $"Protocol: {Protocol}"
-            : ErrorDescription;
+        IsPending
+            ? (string.IsNullOrEmpty(ErrorDescription)
+                ? "Sending to Ergani in the background…"
+                : $"Waiting — will retry automatically ({ErrorDescription})")
+            : Success
+                ? $"Protocol: {Protocol}"
+                : ErrorDescription;
 }
 
 /// <summary>
@@ -72,6 +93,7 @@ public partial class WorkCardScanViewModel :
     IAdminSectionViewModel
 {
     private readonly IWorkCardSubmitter _workCardSubmitter;
+    private readonly ErganiRetryService _retryService;
     private readonly IConnectionStateService _connectionState;
     private readonly ICompanyService _companyService;
     private readonly ICompanyContext _companyContext;
@@ -161,11 +183,14 @@ public partial class WorkCardScanViewModel :
 
     public WorkCardScanViewModel(
         IWorkCardSubmitter workCardSubmitter,
+        ErganiRetryService retryService,
         IConnectionStateService connectionState,
         ICompanyService companyService,
         ICompanyContext companyContext)
     {
         _workCardSubmitter = workCardSubmitter;
+        _retryService = retryService;
+        _retryService.QueuedScanUpdated += OnQueuedScanUpdated;
         _connectionState = connectionState;
         _companyService = companyService;
         _companyContext = companyContext;
@@ -692,8 +717,7 @@ public partial class WorkCardScanViewModel :
                         .Where(
                             p =>
                                 p.EmployeeId ==
-                                    employee.Id &&
-                                p.Synced)
+                                    employee.Id)
                         .OrderByDescending(
                             p => p.ScannedAt)
                         .FirstOrDefault();
@@ -754,130 +778,49 @@ public partial class WorkCardScanViewModel :
                         scanTime
                 };
 
-            var result =
-                await _workCardSubmitter
-                    .SubmitAsync(request);
-
             var name =
                 employee.FullName;
 
-            if (result.Success)
+            /*
+             * Save-first: record the scan locally and free the scanner at once so the
+             * next person can scan. The background service sends it to Ergani and keeps
+             * retrying while the connection is down.
+             */
+            var queued = new PendingSubmission
             {
-                /*
-                 * Store successful scan in local cache.
-                 */
-                var successfulSubmission =
-                    new PendingSubmission
-                    {
-                        EmployeeId =
-                            employee.Id,
+                EmployeeId = employee.Id,
+                CompanyId = companyId.Value,
+                BranchId = employee.BranchId,
+                EmployeeBarcodeId = employee.BarcodeId,
+                MovementType = movement,
+                ScannedAt = scanTime,
+                Synced = false
+            };
 
-                        CompanyId =
-                            companyId.Value,
+            cache.PendingSubmissions.Add(queued);
 
-                        BranchId =
-                            employee.BranchId,
+            await cache.SaveChangesAsync();
 
-                        EmployeeBarcodeId =
-                            employee.BarcodeId,
+            _retryService.TriggerNow();
 
-                        MovementType =
-                            movement,
+            ShowResponse(
+                true,
+                $"✅ {movement.ToUpper()} — {name}",
+                $"Saved — sending to Ergani in the background.\n" +
+                $"Time:          {scanTime:HH:mm:ss dd/MM/yyyy}");
 
-                        ScannedAt =
-                            scanTime,
+            RecentScans.Insert(
+                0,
+                new ScanResultRow
+                {
+                    ScannedAt = scanTime,
+                    EmployeeName = name,
+                    MovementType = movement,
+                    PendingId = queued.Id,
+                    IsPending = true   // updated automatically when the background send finishes
+                });
 
-                        Synced =
-                            true,
-
-                        SyncedAt =
-                            DateTime.UtcNow,
-
-                        SyncAttempts =
-                            0,
-
-                        LastSyncError =
-                            null
-                    };
-
-                cache.PendingSubmissions.Add(
-                    successfulSubmission);
-
-                cache.SaveChanges();
-
-                var protocol =
-                    result.Protocol ??
-                    string.Empty;
-
-                ShowResponse(
-                    true,
-                    $"✅ {movement.ToUpper()} — {name}",
-                    $"Protocol:      {protocol}\n" +
-                    $"Submission ID: {result.SubmissionId}\n" +
-                    $"Time:          {scanTime:HH:mm:ss dd/MM/yyyy}");
-
-                RecentScans.Insert(
-                    0,
-                    new ScanResultRow
-                    {
-                        ScannedAt =
-                            scanTime,
-
-                        EmployeeName =
-                            name,
-
-                        MovementType =
-                            movement,
-
-                        Success =
-                            true,
-
-                        Protocol =
-                            protocol
-                    });
-
-                ClearRetryState();
-            }
-            else
-            {
-                var error =
-                    result.ErrorMessage ??
-                    "Ergani unavailable.";
-
-                ShowResponse(
-                    false,
-                    $"❌ Failed — {name}",
-                    error);
-
-                RecentScans.Insert(
-                    0,
-                    new ScanResultRow
-                    {
-                        ScannedAt =
-                            scanTime,
-
-                        EmployeeName =
-                            name,
-
-                        MovementType =
-                            movement,
-
-                        Success =
-                            false,
-
-                        ErrorDescription =
-                            error
-                    });
-
-                /*
-                 * Save failed request and open retry dialog.
-                 */
-                OpenRetryDialog(
-                    request,
-                    name,
-                    movement,
-                    scanTime);
-            }
+            ClearRetryState();
 
             while (RecentScans.Count > 50)
             {
@@ -1081,6 +1024,59 @@ public partial class WorkCardScanViewModel :
     // ────────────────────────────────────────────────────────────────────────
     // RESPONSE / HISTORY
     // ────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called (from the background sender's thread) when a queued scan is delivered, rejected
+    /// or is still waiting. Updates the matching row in the recent-scans list in place.
+    /// </summary>
+    private void OnQueuedScanUpdated(object? sender, QueuedScanUpdate update)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var row = RecentScans.FirstOrDefault(r => r.PendingId == update.PendingId);
+            if (row == null) return;
+
+            switch (update.Status)
+            {
+                case QueuedScanStatus.Sent:
+                    row.IsPending = false;
+                    row.Success = true;
+                    row.ErrorDescription = string.Empty;
+                    row.Protocol = update.Protocol ?? string.Empty;
+                    break;
+
+                case QueuedScanStatus.Rejected:
+                    row.IsPending = false;
+                    row.Success = false;
+                    row.ErrorDescription = update.Error ?? "Rejected by Ergani.";
+                    break;
+
+                default: // Waiting
+                    row.IsPending = true;
+                    row.ErrorDescription = update.Error ?? string.Empty;
+                    break;
+            }
+
+            // Keep the big message at the top in step when it belongs to the latest scan.
+            if (RecentScans.Count > 0 && ReferenceEquals(RecentScans[0], row) &&
+                update.Status != QueuedScanStatus.Waiting)
+            {
+                var title = $"{row.MovementType.ToUpper()} — {row.EmployeeName}";
+
+                if (update.Status == QueuedScanStatus.Sent)
+                    ShowResponse(
+                        true,
+                        $"✅ {title}",
+                        $"Protocol:      {row.Protocol}\n" +
+                        $"Time:          {row.ScannedAt:HH:mm:ss dd/MM/yyyy}");
+                else
+                    ShowResponse(
+                        false,
+                        $"❌ Failed — {row.EmployeeName}",
+                        row.ErrorDescription);
+            }
+        });
+    }
 
     private void ShowResponse(
         bool success,

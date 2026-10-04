@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -13,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ErganiManager.UI.ViewModels;
 
-public class SubmissionLogRow
+public partial class SubmissionLogRow : ObservableObject
 {
     public int Id { get; set; }
 
@@ -34,6 +35,27 @@ public class SubmissionLogRow
     public string? RequestPayloadJson { get; set; }
 
     public string? ResponseRawJson { get; set; }
+
+    public int RetryCount { get; set; }
+
+    public DateTime? LastRetryAt { get; set; }
+
+    /// <summary>Tick box state for "Retry selected".</summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
+    /// <summary>Only failed work card uploads can be retried.</summary>
+    public bool CanRetry => !Success && SubmissionType == "WorkCard";
+
+    public bool HasRetries => RetryCount > 0;
+
+    public string RetryText => $"↻ {RetryCount}";
+
+    public string LastRetryText =>
+        LastRetryAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") ?? string.Empty;
+
+    public string RetrySummary =>
+        HasRetries ? $"Retries: {RetryCount}  •  last: {LastRetryText}" : string.Empty;
 
     public string StatusIcon => Success ? "✅" : "❌";
 
@@ -78,6 +100,7 @@ public partial class SubmissionLogViewModel
 {
     private readonly IConnectionStateService _connectionState;
     private readonly ErganiRetryService _retryService;
+    private readonly WorkCardLogRetryService _logRetryService;
 
     private UserSession? _session;
 
@@ -98,7 +121,25 @@ public partial class SubmissionLogViewModel
     private bool _isLoading;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RetrySelectedCommand))]
     private bool _isRetrying;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RetrySelectedCommand))]
+    [NotifyPropertyChangedFor(nameof(RetrySelectedText))]
+    private int _selectedRetryCount;
+
+    /// <summary>
+    /// f_aitiologia codes offered for retries made MORE than 10 minutes after the first
+    /// attempt. Within 10 minutes the field is always sent empty.
+    /// </summary>
+    public ObservableCollection<string> LateJustificationCodes { get; } =
+        new() { "001", "002", "003" };
+
+    [ObservableProperty]
+    private string _selectedLateJustification = WorkCardLogRetryService.DefaultLateJustification;
+
+    public string RetrySelectedText => $"{Loc[L.RetrySelected]} ({SelectedRetryCount})";
 
     [ObservableProperty]
     private string _failedCountText = string.Empty;
@@ -125,10 +166,12 @@ public partial class SubmissionLogViewModel
 
     public SubmissionLogViewModel(
         IConnectionStateService connectionState,
-        ErganiRetryService retryService)
+        ErganiRetryService retryService,
+        WorkCardLogRetryService logRetryService)
     {
         _connectionState = connectionState;
         _retryService = retryService;
+        _logRetryService = logRetryService;
     }
 
     public void Initialize(UserSession session)
@@ -181,6 +224,26 @@ public partial class SubmissionLogViewModel
             });
         }
 
+        // Scans saved locally and still waiting for the background sender (e.g. no connection).
+        var waiting = await cache.PendingSubmissions
+            .Where(p => p.CompanyId == companyId && !p.Synced)
+            .OrderBy(p => p.ScannedAt)
+            .ToListAsync();
+
+        foreach (var p in waiting)
+        {
+            FailedSubmissions.Add(new FailedSubmissionRow
+            {
+                Id = p.Id,
+                EmployeeId = p.EmployeeId.ToString(),
+                MovementType = p.MovementType,
+                OriginalScannedAt = p.ScannedAt,
+                FailureReason = "Waiting to send",
+                ErrorDescription = p.LastSyncError,
+                RetryCount = p.SyncAttempts
+            });
+        }
+
         FailedCountText = FailedSubmissions.Count == 0
             ? Loc[L.NoFailedPending]
             : string.Format(
@@ -199,7 +262,8 @@ public partial class SubmissionLogViewModel
 
         try
         {
-            _retryService.Start();
+            _retryService.Start();      // no-op when already running
+            _retryService.TriggerNow(); // send queued scans right now
 
             await Task.Delay(TimeSpan.FromSeconds(3));
 
@@ -220,6 +284,67 @@ public partial class SubmissionLogViewModel
             IsRetrying = false;
         }
     }
+
+    // ── Retry selected failed work cards ─────────────────────────────────
+
+    [RelayCommand]
+    private void SelectAllFailed()
+    {
+        var retryable = Rows.Where(r => r.CanRetry).ToList();
+        if (retryable.Count == 0) return;
+
+        // Toggle: if anything is unticked tick everything, otherwise clear all.
+        var tickAll = retryable.Any(r => !r.IsSelected);
+        foreach (var row in retryable)
+            row.IsSelected = tickAll;
+    }
+
+    private bool CanRetrySelected() => SelectedRetryCount > 0 && !IsRetrying;
+
+    [RelayCommand(CanExecute = nameof(CanRetrySelected))]
+    private async Task RetrySelectedAsync()
+    {
+        var ids = Rows.Where(r => r.IsSelected && r.CanRetry).Select(r => r.Id).ToList();
+        if (ids.Count == 0) return;
+
+        var keepSelectedId = SelectedRow?.Id;
+
+        IsRetrying = true;
+        StatusMessage = $"Retrying {ids.Count} work card(s)...";
+
+        try
+        {
+            var results = await _logRetryService.RetryAsync(ids, SelectedLateJustification);
+
+            var ok      = results.Count(r => r.Status == LogRetryStatus.Succeeded);
+            var failed  = results.Count(r => r.Status == LogRetryStatus.Failed);
+            var skipped = results.Count(r => r.Status == LogRetryStatus.Skipped);
+
+            // Rows were updated in place in the database — reload to show the new state.
+            await LoadAsync();
+            SelectedRow = Rows.FirstOrDefault(r => r.Id == keepSelectedId);
+
+            StatusMessage = $"Retry finished: {ok} succeeded, {failed} failed" +
+                            (skipped > 0 ? $", {skipped} skipped." : ".");
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = Loc[L.ErrorPrefix] + ex.Message;
+        }
+        finally
+        {
+            IsRetrying = false;
+        }
+    }
+
+    private void OnRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(SubmissionLogRow.IsSelected))
+            UpdateSelectedRetryCount();
+    }
+
+    private void UpdateSelectedRetryCount() =>
+        SelectedRetryCount = Rows.Count(r => r.IsSelected);
 
     [RelayCommand]
     private async Task LoadAsync()
@@ -293,7 +418,7 @@ public partial class SubmissionLogViewModel
 
             foreach (var r in results)
             {
-                Rows.Add(new SubmissionLogRow
+                var row = new SubmissionLogRow
                 {
                     Id = r.Id,
                     SubmissionType = r.SubmissionType,
@@ -304,9 +429,16 @@ public partial class SubmissionLogViewModel
                     ErrorMessage = r.ErrorMessage,
                     DurationMs = r.DurationMs,
                     RequestPayloadJson = r.RequestPayloadJson,
-                    ResponseRawJson = r.ResponseRawJson
-                });
+                    ResponseRawJson = r.ResponseRawJson,
+                    RetryCount = r.RetryCount,
+                    LastRetryAt = r.LastRetryAt
+                };
+
+                row.PropertyChanged += OnRowPropertyChanged;
+                Rows.Add(row);
             }
+
+            UpdateSelectedRetryCount();
 
             StatusMessage = results.Count == 500
                 ? "Showing latest 500 — narrow date range for more."

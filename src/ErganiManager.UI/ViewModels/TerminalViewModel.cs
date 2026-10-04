@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using ErganiManager.Core.Interfaces;
 using ErganiManager.Core.Models;
 using ErganiManager.Data.Entities;
+using ErganiManager.ErganiApi.Services;
 using ErganiManager.LocalCache;
 using ErganiManager.LocalCache.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +28,7 @@ public enum ScanPopupKind
 public partial class TerminalViewModel : ViewModelBase
 {
     private readonly IConnectionStateService _connectionState;
-    private readonly IWorkCardSubmitter _workCardSubmitter;
+    private readonly ErganiRetryService _retryService;
     private readonly IEmailAlertService _emailAlertService;
     private readonly ICacheSyncService _cacheSync;
     private readonly System.Timers.Timer _clockTimer;
@@ -59,12 +60,12 @@ public partial class TerminalViewModel : ViewModelBase
 
     public TerminalViewModel(
         IConnectionStateService connectionState,
-        IWorkCardSubmitter workCardSubmitter,
+        ErganiRetryService retryService,
         IEmailAlertService emailAlertService,
         ICacheSyncService cacheSync)
     {
         _connectionState = connectionState;
-        _workCardSubmitter = workCardSubmitter;
+        _retryService = retryService;
         _emailAlertService = emailAlertService;
         _cacheSync = cacheSync;
 
@@ -250,8 +251,9 @@ public partial class TerminalViewModel : ViewModelBase
         var schedule = await cache.CachedSchedules
             .FirstOrDefaultAsync(s => s.EmployeeId == employee.Id && s.ScheduleDate == today);
 
-        var connState = await _connectionState.EvaluateAsync();
-        var isOnline = connState == AppConnectionState.Normal;
+        // Cached state, refreshed in the background — probing the database here could hold up
+        // the next person in the queue for as long as a connection timeout.
+        var isOnline = _connectionState.CurrentState == AppConnectionState.Normal;
 
         var movementType = await DetermineMovementTypeAsync(cache, employee.Id);
 
@@ -286,7 +288,7 @@ public partial class TerminalViewModel : ViewModelBase
                 }
             }
 
-            await SubmitOrQueueAsync(cache, employee, companyId, "Arrival", now);
+            await QueueScanAsync(cache, employee, companyId, "Arrival", now);
 
             var shiftText = schedule is { StartTime: not null, EndTime: not null }
                 ? $"{Loc[L.ShiftLabel]}: {schedule.StartTime:HH:mm} → {schedule.EndTime:HH:mm}"
@@ -313,7 +315,7 @@ public partial class TerminalViewModel : ViewModelBase
                 }
             }
 
-            await SubmitOrQueueAsync(cache, employee, companyId, "Departure", now, isEarly, earlyMinutes);
+            await QueueScanAsync(cache, employee, companyId, "Departure", now);
 
             if (isEarly)
             {
@@ -376,32 +378,15 @@ public partial class TerminalViewModel : ViewModelBase
         return "Arrival";
     }
 
-    private async Task SubmitOrQueueAsync(
+    /// <summary>
+    /// Save-first: the scan is written to the local cache (a few milliseconds) and the background
+    /// service sends it to Ergani, retrying for as long as the connection is down. The terminal is
+    /// free for the next person immediately, whatever the state of the network or Ergani.
+    /// </summary>
+    private async Task QueueScanAsync(
         LocalCacheDbContext cache, CachedEmployee employee, int companyId,
-        string movementType, DateTime scannedAt, bool isEarly = false, int earlyMinutes = 0)
+        string movementType, DateTime scannedAt)
     {
-        var connState = await _connectionState.EvaluateAsync();
-
-        if (connState == AppConnectionState.Normal)
-        {
-            var request = new WorkCardSubmissionRequest
-            {
-                EmployeeId = employee.Id,
-                CompanyId = companyId,
-                BranchId = employee.BranchId,
-                MovementType = movementType,
-                MovementDateTime = scannedAt
-            };
-
-            var outcome = await _workCardSubmitter.SubmitAsync(request);
-
-            if (outcome.Success)
-                return;
-
-            // Fall through to queueing if the live submission failed despite
-            // being "online" (e.g. Ergani itself is down, not just our DB).
-        }
-
         cache.PendingSubmissions.Add(new PendingSubmission
         {
             EmployeeId = employee.Id,
@@ -413,6 +398,9 @@ public partial class TerminalViewModel : ViewModelBase
             Synced = false
         });
         await cache.SaveChangesAsync();
+
+        // Wake the background sender now; this returns immediately.
+        _retryService.TriggerNow();
     }
 
     private static async Task LogBlockedAttemptAsync(LocalCacheDbContext cache, CachedEmployee employee, int companyId)

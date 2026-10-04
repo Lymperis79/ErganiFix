@@ -29,6 +29,8 @@ public static class GreekStrings
         [L.Search]              = "Αναζήτηση",
         [L.Refresh]             = "Ανανέωση",
         [L.RetryNow]            = "⚡ Επανάληψη Τώρα",
+        [L.RetrySelected]       = "⚡ Επανάληψη επιλεγμένων",
+        [L.SelectAllFailed]     = "Επιλογή όλων των αποτυχημένων",
         [L.TestConnection]      = "Δοκιμή Σύνδεσης",
 
         // ── Auth / Login ──────────────────────────────────────
