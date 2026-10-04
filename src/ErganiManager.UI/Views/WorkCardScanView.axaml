@@ -28,7 +28,7 @@
                                    FontWeight="SemiBold" FontSize="14" />
 
                         <TextBox Text="{Binding BarcodeInput}"
-                                 Watermark="Scan badge or type barcode and press Enter..."
+                                 PlaceholderText="Scan badge or type barcode and press Enter..."
                                  FontSize="18"
                                  FontFamily="Consolas,Menlo,monospace"
                                  IsEnabled="{Binding !IsProcessing}">
@@ -52,7 +52,7 @@
                             </StackPanel>
 
                             <TextBlock Text="Date" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding MovementDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}" Watermark="dd/mm/yyyy" />
+                            <TextBox Text="{Binding MovementDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}" PlaceholderText="dd/mm/yyyy" />
 
                             <TextBlock Text="Time" FontWeight="SemiBold" />
                             <TimePicker SelectedTime="{Binding MovementTime}"

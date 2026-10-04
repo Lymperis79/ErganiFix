@@ -129,12 +129,12 @@
                            Foreground="#888888"
                            FontSize="11" />
 
-                <TextBlock Text="038311286"
+                <TextBlock Text="AFMNO"
                            Foreground="#AAAAAA"
                            FontFamily="Consolas,Menlo,monospace"
                            FontSize="11" />
 
-                <TextBlock Text="ergInm:ΑΡΙΣΤΕΙΔΗΣ;In:NIZAMΗΣ;afm:038311286;id:106393"
+                <TextBlock Text="ergInm:NAME;In:SURNAMEΗΣ;afm:AFMNO;id:NO"
                            Foreground="#AAAAAA"
                            FontFamily="Consolas,Menlo,monospace"
                            FontSize="11"

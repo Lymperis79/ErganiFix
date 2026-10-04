@@ -54,7 +54,7 @@ public class ScanResultRow
 /// <summary>
 /// Parsed data from an Ergani scanner string such as:
 ///
-/// ergInm:ΑΡΙΣΤΕΙΔΗΣ;In:NIZAMΗΣ;afm:038311286;id:106393
+/// ergInm:XXXX;In:XXXX;afm:XXXX;id:XXXX
 /// </summary>
 public sealed class ErganiScanData
 {
@@ -596,11 +596,11 @@ public partial class WorkCardScanViewModel :
          *
          * This means:
          *
-         * 038311286
+         * XXXX
          *
          * and
          *
-         * ergInm:...;afm:038311286;...
+         * ergInm:...;afm:XXXX;...
          *
          * are considered the same employee scan.
          */

@@ -33,7 +33,7 @@
 
             <TextBox Name="ScanInputBox"
                      Text="{Binding ScanInput}"
-                     Watermark="{Binding Loc[ScanPrompt]}"
+                     PlaceholderText="{Binding Loc[ScanPrompt]}"
                      FontSize="22" Height="56"
                      HorizontalAlignment="Stretch"
                      HorizontalContentAlignment="Center"

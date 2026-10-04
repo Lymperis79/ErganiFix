@@ -8,6 +8,7 @@ using ErganiManager.LocalCache.Entities;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ErganiManager.UI.ViewModels;
@@ -115,8 +116,15 @@ public partial class TerminalViewModel : ViewModelBase
         if (string.IsNullOrWhiteSpace(barcode) || _session?.CompanyId == null || IsProcessing)
             return;
 
-        // Cooldown check — block repeat scan within 20 seconds
-        if (_lastScanTime.TryGetValue(barcode, out var lastTime))
+        // Use the same cooldown key for a plain AFM and an Ergani
+        // serialized scan containing that AFM.
+        var afm = ExtractAfm(barcode);
+        var cooldownKey = afm != null
+            ? $"AFM:{afm}"
+            : $"BARCODE:{barcode}";
+
+        // Cooldown check — block repeat scans of the same employee within 20 seconds.
+        if (_lastScanTime.TryGetValue(cooldownKey, out var lastTime))
         {
             var elapsed = DateTime.Now - lastTime;
             if (elapsed < ScanCooldown)
@@ -124,7 +132,7 @@ public partial class TerminalViewModel : ViewModelBase
                 var remaining = (int)Math.Ceiling((ScanCooldown - elapsed).TotalSeconds);
                 ShowPopup(ScanPopupKind.TooEarlyBlocked,
                     "⏳ ALREADY SCANNED", "",
-                    $"This badge was scanned {(int)elapsed.TotalSeconds}s ago.",
+                    $"This employee was scanned {(int)elapsed.TotalSeconds}s ago.",
                     $"Please wait {remaining} more second(s).", "");
                 return;
             }
@@ -134,13 +142,67 @@ public partial class TerminalViewModel : ViewModelBase
         try
         {
             await HandleScanAsync(barcode, _session.CompanyId.Value);
-            _lastScanTime[barcode] = DateTime.Now;
+            _lastScanTime[cooldownKey] = DateTime.Now;
         }
         finally
         {
             IsProcessing = false;
         }
 
+    }
+
+    /// <summary>
+    /// Returns a normalized AFM from either a plain nine-digit value or
+    /// a serialized Ergani scanner string such as:
+    /// ergInm:NAME;In:FIRSTNAME;afm:AFMno;id:idNo
+    /// </summary>
+    private static string? ExtractAfm(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        var value = input.Trim();
+
+        // Plain AFM: require exactly nine digits. This avoids treating
+        // arbitrary text containing nine digits as an AFM.
+        if (value.Length == 9 && value.All(char.IsDigit))
+            return value;
+
+        // Serialized Ergani scanner input: parse key/value pairs separated by ';'.
+        if (!value.Contains(':'))
+            return null;
+
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var part in value.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = part.IndexOf(':');
+            if (separator <= 0)
+                continue;
+
+            var key = part[..separator].Trim();
+            var fieldValue = part[(separator + 1)..].Trim();
+
+            if (key.Length > 0)
+                values[key] = fieldValue;
+        }
+
+        if (!values.TryGetValue("afm", out var afm))
+            return null;
+
+        return NormalizeAfm(afm);
+    }
+
+    private static string? NormalizeAfm(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        // AFM is stored as a string so leading zeroes are preserved.
+        // Accept separators/spaces in the scanned field, but require nine digits.
+        var digits = new string(value.Where(char.IsDigit).ToArray());
+
+        return digits.Length == 9 ? digits : null;
     }
 
     private async Task HandleScanAsync(string barcode, int companyId)
@@ -150,13 +212,36 @@ public partial class TerminalViewModel : ViewModelBase
         // kept warm by CacheSyncService while online.
         using var cache = LocalCacheDbContextFactory.Create();
 
+        var scanValue = barcode.Trim();
+        var afm = ExtractAfm(scanValue);
+
+        // First try an exact barcode match. This preserves existing barcode
+        // behavior, including barcodes that happen to contain nine digits.
         var employee = await cache.CachedEmployees
-            .FirstOrDefaultAsync(e => e.CompanyId == companyId && e.BarcodeId == barcode && e.IsActive);
+            .FirstOrDefaultAsync(e =>
+                e.CompanyId == companyId &&
+                e.BarcodeId == scanValue &&
+                e.IsActive);
+
+        // If no barcode matches, try the AFM/TaxId. ExtractAfm supports both
+        // a plain nine-digit AFM and serialized Ergani scanner data.
+        if (employee == null && afm != null)
+        {
+            employee = await cache.CachedEmployees
+                .FirstOrDefaultAsync(e =>
+                    e.CompanyId == companyId &&
+                    e.TaxId == afm &&
+                    e.IsActive);
+        }
 
         if (employee == null)
         {
+            var detail = afm != null
+                ? $"No active employee with AFM '{afm}' was found for this company."
+                : $"Barcode '{scanValue}' is not recognized.";
+
             ShowPopup(ScanPopupKind.UnknownBadge, Loc[L.UnknownBadge], "",
-                $"Barcode '{barcode}' is not recognized.", "Please contact your administrator.", "");
+                detail, "Please contact your administrator.", "");
             return;
         }
 
