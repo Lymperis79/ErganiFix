@@ -123,74 +123,41 @@ public partial class WorkCardScanViewModel :
             "003"
         };
 
-    [ObservableProperty]
-    private bool _hasActiveCompany;
-
-    [ObservableProperty]
-    private string _noCompanyMessage =
-        string.Empty;
-
-    [ObservableProperty]
-    private string _barcodeInput =
-        string.Empty;
-
-    [ObservableProperty]
-    private bool _isArrival = true;
-
-    [ObservableProperty]
-    private bool _autoDetect = true;
-
-    [ObservableProperty]
-    private bool _isProcessing;
+    [ObservableProperty] private bool _hasActiveCompany;
+    [ObservableProperty] private string _noCompanyMessage = string.Empty;
+    [ObservableProperty] private string _barcodeInput = string.Empty;
+    [ObservableProperty] private bool _isArrival = true;
+    [ObservableProperty] private bool _autoDetect = true;
+    [ObservableProperty] private bool _isProcessing;
 
     /*
      * Manual date/time override.
      * Only used when AutoDetect = false.
      */
-    [ObservableProperty]
-    private DateTimeOffset? _movementDate =
-        DateTimeOffset.Now;
+    [ObservableProperty] private DateTimeOffset? _movementDate = DateTimeOffset.Now;
 
-    [ObservableProperty]
-    private TimeSpan? _movementTime =
-        DateTime.Now.TimeOfDay;
+    [ObservableProperty] private TimeSpan? _movementTime = DateTime.Now.TimeOfDay;
 
     /*
      * Normal response
      */
-    [ObservableProperty]
-    private string _responseTitle =
-        string.Empty;
-
-    [ObservableProperty]
-    private string _responseDetail =
-        string.Empty;
-
-    [ObservableProperty]
-    private bool _responseSuccess;
-
-    [ObservableProperty]
-    private bool _hasResponse;
+    [ObservableProperty] private string _responseTitle = string.Empty;
+    [ObservableProperty] private string _responseDetail = string.Empty;
+    [ObservableProperty] private bool _responseSuccess;
+    [ObservableProperty] private bool _hasResponse;
 
     /*
      * Retry dialog
      */
-    [ObservableProperty]
-    private bool _isRetryDialogOpen;
+    [ObservableProperty] private bool _isRetryDialogOpen;
 
-    [ObservableProperty]
-    private string _retryEmployeeName =
-        string.Empty;
+    [ObservableProperty] private string _retryEmployeeName = string.Empty;
 
-    [ObservableProperty]
-    private string _retryMovementType =
-        string.Empty;
+    [ObservableProperty] private string _retryMovementType = string.Empty;
 
-    [ObservableProperty]
-    private DateTime _retryDateTime;
+    [ObservableProperty] private DateTime _retryDateTime;
 
-    [ObservableProperty]
-    private string? _retryAitiologia;
+    [ObservableProperty] private string? _retryAitiologia;
 
     public WorkCardScanViewModel(
         IWorkCardSubmitter workCardSubmitter,
@@ -420,11 +387,11 @@ public partial class WorkCardScanViewModel :
     /// <summary>
     /// Accepts:
     ///
-    /// 038311286
+    /// xxxx
     ///
     /// or:
     ///
-    /// ergInm:ΑΡΙΣΤΕΙΔΗΣ;In:NIZAMΗΣ;afm:038311286;id:106393
+    /// ergInm:xxxx;In:xxxx;afm:xxxx;id:xxxx
     ///
     /// Returns the normalized AFM when the input represents an AFM.
     /// </summary>
@@ -476,10 +443,10 @@ public partial class WorkCardScanViewModel :
     /// <summary>
     /// Parses the scanner string:
     ///
-    /// ergInm:ΑΡΙΣΤΕΙΔΗΣ;
-    /// In:NIZAMΗΣ;
-    /// afm:038311286;
-    /// id:106393
+    /// ergInm:xxxx;
+    /// In:xxxx;
+    /// afm:xxxx;
+    /// id:xxxx
     ///
     /// into a small strongly typed object.
     /// </summary>
@@ -579,98 +546,7 @@ public partial class WorkCardScanViewModel :
         return digits.PadLeft(9, '0');
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // EMPLOYEE AFM LOOKUP
-    // ────────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Reads the employee AFM from CachedEmployee without hard-coding
-    /// the property name.
-    ///
-    /// This supports common names used by the cache model:
-    ///
-    /// TaxId
-    /// Afm
-    /// AFM
-    /// TaxIdentificationNumber
-    /// EmployeeTaxId
-    /// ErganiAfm
-    /// </summary>
-    private static string? GetEmployeeAfm(
-        CachedEmployee employee)
-    {
-        var type =
-            typeof(CachedEmployee);
-
-        var preferredNames =
-            new[]
-            {
-                "TaxId",
-                "TaxID",
-                "Afm",
-                "AFM",
-                "TaxIdentificationNumber",
-                "EmployeeTaxId",
-                "EmployeeAfm",
-                "ErganiAfm"
-            };
-
-        foreach (var name in preferredNames)
-        {
-            var property =
-                type.GetProperty(
-                    name,
-                    BindingFlags.Public |
-                    BindingFlags.Instance |
-                    BindingFlags.IgnoreCase);
-
-            if (property == null)
-                continue;
-
-            if (property.PropertyType != typeof(string))
-                continue;
-
-            var value =
-                property.GetValue(employee) as string;
-
-            var afm =
-                NormalizeAfm(value);
-
-            if (afm != null)
-                return afm;
-        }
-
-        /*
-         * Fallback:
-         * look for a string property whose name contains
-         * AFM or Tax.
-         */
-        var fallback =
-            type.GetProperties(
-                    BindingFlags.Public |
-                    BindingFlags.Instance)
-                .FirstOrDefault(
-                    p =>
-                        p.PropertyType == typeof(string) &&
-                        (
-                            p.Name.Contains(
-                                "Afm",
-                                StringComparison.OrdinalIgnoreCase) ||
-                            p.Name.Contains(
-                                "Tax",
-                                StringComparison.OrdinalIgnoreCase)
-                        ));
-
-        if (fallback != null)
-        {
-            var value =
-                fallback.GetValue(employee) as string;
-
-            return NormalizeAfm(value);
-        }
-
-        return null;
-    }
+    
 
     // ────────────────────────────────────────────────────────────────────────
     // SCAN SUBMISSION
@@ -777,7 +653,7 @@ public partial class WorkCardScanViewModel :
             employee = await cache.CachedEmployees
                 .FirstOrDefaultAsync(e =>
                     e.CompanyId == companyId.Value &&
-                    e.BarcodeId == scanValue &&
+                    e.TaxId == afm &&
                     e.IsActive);
 
             if (employee == null)

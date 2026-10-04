@@ -1,13 +1,14 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ErganiManager.Core.Interfaces;
 using ErganiManager.Core.Models;
+using ErganiManager.Data.Entities;
 using ErganiManager.LocalCache;
 using ErganiManager.LocalCache.Entities;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace ErganiManager.UI.ViewModels;
 
@@ -51,6 +52,9 @@ public partial class TerminalViewModel : ViewModelBase
     [ObservableProperty] private string _popupDetailLine1 = string.Empty;
     [ObservableProperty] private string _popupDetailLine2 = string.Empty;
     [ObservableProperty] private string _popupDetailLine3 = string.Empty;
+    
+    [ObservableProperty] private bool _isArrival = true;
+    [ObservableProperty] private bool _autoDetect = true;
 
     public TerminalViewModel(
         IConnectionStateService connectionState,
@@ -136,6 +140,7 @@ public partial class TerminalViewModel : ViewModelBase
         {
             IsProcessing = false;
         }
+
     }
 
     private async Task HandleScanAsync(string barcode, int companyId)
