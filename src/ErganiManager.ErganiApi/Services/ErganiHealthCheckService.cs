@@ -69,7 +69,7 @@ public class ErganiHealthCheckService : IErganiHealthCheckService
             {
                 Username = credentials.Username,
                 Password = credentials.Password,
-                Usertype = ErganiEndpoints.UsertypeErgani   // "02"
+                Usertype = ErganiEndpoints.UsertypeExternal   // "01"
             });
 
             using var content = new StringContent(body, Encoding.UTF8, "application/json");
