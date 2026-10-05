@@ -7,7 +7,7 @@
     <Grid RowDefinitions="Auto,Auto,Auto,*">
 
         <!-- Row 0: Header -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,8">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,8">
             <TextBlock Grid.Column="0" Text="{Binding Loc[Schedules]}" FontSize="22" FontWeight="Bold" />
             <Button Grid.Column="1" Content="⬆ Import"
                     Command="{Binding RequestImportCommand}"
@@ -21,17 +21,20 @@
             <Button Grid.Column="4" Content="{Binding Loc[ExportMonth]}"
                     Command="{Binding ExportMonthCommand}"
                     Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="5" Content="📤 Submit Schedule"
+            <Button Grid.Column="5" Content="{Binding SubmitScheduleButtonText}"
                     Command="{Binding SubmitScheduleToErganiCommand}"
                     Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
             <Button Grid.Column="6" Content="⏱ Submit Overtime"
                     Command="{Binding SubmitOvertimesCommand}"
+                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
+            <Button Grid.Column="7" Content="📜 Log"
+                    Command="{Binding OpenLogCommand}"
                     IsEnabled="{Binding HasActiveCompany}" />
         </Grid>
 
         <!-- Row 1: Controls bar -->
         <Border Grid.Row="1" Background="#1A1D23" CornerRadius="8" Padding="12" Margin="0,0,0,8">
-            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto,Auto,Auto">
 
                 <!-- Employee picker -->
                 <TextBlock Grid.Column="0" Text="Employee:" VerticalAlignment="Center" Margin="0,0,8,0" />
@@ -79,6 +82,10 @@
                 </Border>
                 <Button Grid.Column="6" Content="✕ Clear" IsVisible="{Binding HasSelection}"
                         Command="{Binding ClearSelectionCommand}" Margin="0,0,4,0" />
+                <Button Grid.Column="7" Content="{Binding DeleteSelectedButtonText}"
+                        IsVisible="{Binding HasSelection}"
+                        Command="{Binding DeleteSelectedCommand}"
+                        Foreground="#EF9A9A" Margin="0,0,4,0" />
 
             </Grid>
         </Border>
@@ -93,7 +100,7 @@
             <StackPanel>
 
                 <!-- Tip -->
-                <TextBlock Text="Click a day to open it · Ctrl+Click to multi-select · Select days then press Bulk Apply"
+                <TextBlock Text="Click a day to open it · Ctrl+Click to select days, then Submit / Bulk Apply / Delete act on just those days"
                            FontSize="11" Foreground="#666" Margin="0,0,0,8" />
 
                 <!-- Day-of-week headers -->
@@ -151,6 +158,8 @@
                                         </Grid>
                                         <TextBlock Text="{Binding TimeRangeText}" FontSize="10"
                                                    Foreground="#AAAAAA" TextWrapping="Wrap" />
+                                        <TextBlock Text="📤 sent" FontSize="9" Foreground="#81C784"
+                                                   IsVisible="{Binding IsSubmitted}" />
                                         <!-- Selected indicator -->
                                         <Border IsVisible="{Binding IsSelected}"
                                                 Background="#1B5E20" CornerRadius="3"
@@ -173,7 +182,7 @@
                 IsVisible="{Binding IsDayDialogOpen}"
                 Background="#BB000000" ZIndex="50">
             <Border Background="#1E2128" CornerRadius="12" Padding="24"
-                    Width="440" MaxHeight="520"
+                    Width="500" MaxHeight="520"
                     VerticalAlignment="Center" HorizontalAlignment="Center">
                 <Grid RowDefinitions="*,Auto">
                     <ScrollViewer Grid.Row="0">
@@ -222,18 +231,20 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <Grid Grid.Row="1" ColumnDefinitions="*,*,*" Margin="0,12,0,0" ColumnSpacing="8">
-                        <Button Grid.Column="0" Content="{Binding Loc[Cancel]}"
-                                Command="{Binding CloseDayDialogCommand}"
-                                HorizontalAlignment="Stretch" />
-                        <Button Grid.Column="1" Content="Delete"
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right"
+                                Spacing="8" Margin="0,12,0,0">
+                        <Button Content="{Binding Loc[Cancel]}"
+                                Command="{Binding CloseDayDialogCommand}" />
+                        <Button Content="🗑 Delete"
                                 Command="{Binding DeleteDayCommand}"
                                 IsVisible="{Binding IsEditingExisting}"
-                                Foreground="#EF9A9A" HorizontalAlignment="Stretch" />
-                        <Button Grid.Column="2" Content="{Binding Loc[Save]}"
-                                Command="{Binding SaveDayCommand}" Classes="accent"
-                                HorizontalAlignment="Stretch" />
-                    </Grid>
+                                Foreground="#EF9A9A" />
+                        <Button Content="📤 Save &amp; Submit"
+                                Command="{Binding SaveAndSubmitDayCommand}"
+                                IsVisible="{Binding CanSubmitEditingDay}" />
+                        <Button Content="{Binding Loc[Save]}"
+                                Command="{Binding SaveDayCommand}" Classes="accent" />
+                    </StackPanel>
                 </Grid>
             </Border>
         </Border>
@@ -353,6 +364,92 @@
             </Border>
         </Border>
 
+        <!-- ── Submission log dialog (Ergani responses + PDF) ── -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                IsVisible="{Binding IsLogOpen}"
+                Background="#BB000000" ZIndex="50">
+            <Border Background="#1E2128" CornerRadius="12" Padding="20"
+                    Width="900" Height="560"
+                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="10">
+                    <TextBlock Grid.Row="0" Text="{Binding LogTitle}" FontSize="17" FontWeight="Bold" />
+
+                    <Panel Grid.Row="1">
+                        <TextBlock Text="No schedule has been submitted to Ergani for this employee yet."
+                                   Foreground="Gray" IsVisible="{Binding !HasLogRows}" />
+                        <ScrollViewer IsVisible="{Binding HasLogRows}">
+                            <ItemsControl ItemsSource="{Binding LogRows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ScheduleLogRow">
+                                        <Border Background="#22252C" CornerRadius="6"
+                                                Padding="10,8" Margin="0,0,0,4">
+                                            <Grid ColumnDefinitions="Auto,100,150,*,Auto,Auto" ColumnSpacing="10">
+                                                <TextBlock Grid.Column="0" Text="{Binding StatusIcon}"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1" Text="{Binding ScheduleDateText}"
+                                                           FontWeight="SemiBold" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="2" Text="{Binding SubmittedAtText}"
+                                                           Foreground="#AAAAAA" FontSize="12"
+                                                           VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="3" Text="{Binding Summary}"
+                                                           TextWrapping="Wrap" VerticalAlignment="Center" />
+                                                <Button Grid.Column="4" Content="Response"
+                                                        Tag="{Binding}" Click="OnLogResponseClick" />
+                                                <Button Grid.Column="5" Content="PDF"
+                                                        Tag="{Binding}" Click="OnLogPdfClick"
+                                                        IsEnabled="{Binding HasProtocol}" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Panel>
+
+                    <TextBlock Grid.Row="2" Text="{Binding LogStatus}" Foreground="Gray" FontSize="12"
+                               IsVisible="{Binding LogStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <Button Grid.Row="3" Content="Close" Command="{Binding CloseLogCommand}"
+                            HorizontalAlignment="Right" Width="100" />
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ── Raw Ergani response ── -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                IsVisible="{Binding IsResponseOpen}"
+                Background="#AA000000" ZIndex="60">
+            <Border Background="#1E2128" CornerRadius="12" Padding="20"
+                    Width="800" Height="560"
+                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                    <TextBlock Grid.Row="0" Text="{Binding ResponseTitle}" FontSize="17" FontWeight="Bold" />
+                    <TextBox Grid.Row="1" Text="{Binding ResponseText}" IsReadOnly="True"
+                             AcceptsReturn="True" TextWrapping="NoWrap" FontFamily="Consolas"
+                             ScrollViewer.VerticalScrollBarVisibility="{x:Static ScrollBarVisibility.Auto}"
+                             ScrollViewer.HorizontalScrollBarVisibility="{x:Static ScrollBarVisibility.Auto}" />
+                    <Button Grid.Row="2" Content="Close" Command="{Binding CloseResponseCommand}"
+                            HorizontalAlignment="Right" Width="100" />
+                </Grid>
+            </Border>
+        </Border>
+
+        <!-- ── Delete confirmation ── -->
+        <Border Grid.Row="0" Grid.RowSpan="4"
+                IsVisible="{Binding IsConfirmDeleteOpen}"
+                Background="#BB000000" ZIndex="70">
+            <Border Background="#1E2128" CornerRadius="12" Padding="24"
+                    Width="440" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <StackPanel Spacing="16">
+                    <TextBlock Text="🗑 Delete schedule" FontSize="16" FontWeight="Bold" />
+                    <TextBlock Text="{Binding ConfirmDeleteMessage}" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                        <Button Content="{Binding Loc[Cancel]}" Command="{Binding CancelDeleteCommand}" />
+                        <Button Content="Delete" Command="{Binding ConfirmDeleteCommand}"
+                                Foreground="#EF9A9A" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Border>
 
     </Grid>
 
