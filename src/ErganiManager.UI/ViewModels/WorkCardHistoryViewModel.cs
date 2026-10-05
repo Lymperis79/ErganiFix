@@ -8,6 +8,9 @@ using CommunityToolkit.Mvvm.Input;
 using ErganiManager.Core.Interfaces;
 using ErganiManager.Core.Models;
 using ErganiManager.UI.Services;
+using ErganiManager.Data;
+using ErganiManager.ErganiApi.Services;
+using Microsoft.EntityFrameworkCore;
 
 namespace ErganiManager.UI.ViewModels;
 
@@ -16,7 +19,10 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
     private readonly IWorkCardHistoryService _historyService;
     private readonly IEmployeeService _employeeService;
     private readonly IBranchService _branchService;
-
+    private readonly IErganiDocumentService _documentService;
+    private readonly ErganiRetryService _retryService;
+    private readonly WorkCardLogRetryService _logRetryService;
+    private readonly IConnectionStateService _connectionState;
     private UserSession? _session;
 
     public ObservableCollection<WorkCardHistoryDto> Records { get; } = new();
@@ -36,6 +42,10 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
 
     [ObservableProperty]
     private bool _isLoading;
+
+    [ObservableProperty] private bool _isResponseOpen;
+    [ObservableProperty] private string _responseTitle = string.Empty;
+    [ObservableProperty] private string _responseText = string.Empty;
 
     // --------------------------------------------------------------------
     // Filters
@@ -64,11 +74,20 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
     public WorkCardHistoryViewModel(
         IWorkCardHistoryService historyService,
         IEmployeeService employeeService,
-        IBranchService branchService)
+        IBranchService branchService,
+        IErganiDocumentService documentService,
+        IConnectionStateService connectionState,
+        ErganiRetryService retryService,
+        WorkCardLogRetryService logRetryService)
     {
         _historyService = historyService;
         _employeeService = employeeService;
         _branchService = branchService;
+        _documentService = documentService;
+        _connectionState = connectionState;
+        _retryService = retryService;
+        _logRetryService = logRetryService;
+        _retryService.QueuedScanUpdated += OnQueuedScanUpdated;
     }
 
     public void Initialize(UserSession session)
@@ -165,6 +184,192 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
             StatusMessage =
                 $"❌ Export failed: {ex.Message}";
         }
+    }
+
+    [RelayCommand]
+    private void ShowResponseFor(WorkCardHistoryDto record)
+    {
+        if (string.IsNullOrWhiteSpace(record.ResponseRawJson)) { StatusMessage = "No stored Ergani response is available for this record."; return; }
+        ResponseTitle = $"Ergani Response — {record.EmployeeFullName}"; ResponseText = record.ResponseRawJson; IsResponseOpen = true;
+    }
+
+    [RelayCommand] private void CloseResponse() => IsResponseOpen = false;
+
+    [RelayCommand]
+    private async Task DownloadPdfAsync(WorkCardHistoryDto record)
+    {
+        if (_session?.CompanyId is not int companyId || string.IsNullOrWhiteSpace(record.Protocol)) { StatusMessage = "A protocol is required before downloading the PDF."; return; }
+        try
+        {
+            var bytes = await _documentService.DownloadPdfAsync(companyId, "Documents/WRKCardSE", record.Protocol, record.SubmissionDate);
+            var folder = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            var safeName = string.Join("_", record.EmployeeFullName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+            var path = Path.Combine(folder, $"Ergani_WorkCard_{safeName}_{record.MovementDateTime:yyyyMMdd_HHmmss}_{record.Protocol}.pdf");
+            await File.WriteAllBytesAsync(path, bytes); StatusMessage = $"✅ PDF saved to Desktop: {Path.GetFileName(path)}";
+        }
+        catch (Exception ex) { StatusMessage = $"❌ PDF download failed: {ex.Message}"; }
+    }
+
+
+    [RelayCommand]
+    private void SelectAllRetryable()
+    {
+        var retryable = Records.Where(r => r.CanRetry).ToList();
+        if (retryable.Count == 0)
+            return;
+
+        var selectAll = retryable.Any(r => !r.IsSelected);
+        foreach (var row in retryable)
+            row.IsSelected = selectAll;
+
+        StatusMessage = selectAll
+            ? $"Selected {retryable.Count} retryable work card(s)."
+            : "Retry selection cleared.";
+    }
+
+    [RelayCommand]
+    private async Task RetrySelectedAsync()
+    {
+        if (_session?.CompanyId is not int companyId)
+            return;
+
+        var selected = Records.Where(r => r.IsSelected && r.CanRetry).ToList();
+        if (selected.Count == 0)
+        {
+            StatusMessage = "Select one or more failed/waiting work cards first.";
+            return;
+        }
+
+        StatusMessage = $"Retry sending {selected.Count} work card(s)...";
+        var success = 0;
+        var failed = 0;
+
+        try
+        {
+            // Current offline scans live in PendingSubmissions. Retry exactly the
+            // rows selected by the operator rather than waking the entire queue.
+            var pendingIds = selected
+                .Where(r => r.LocalPendingId.HasValue)
+                .Select(r => r.LocalPendingId!.Value)
+                .ToList();
+
+            if (pendingIds.Count > 0)
+            {
+                var pendingResults = await _retryService.RetryPendingAsync(pendingIds);
+                foreach (var result in pendingResults)
+                {
+                    if (result.Success)
+                    {
+                        success++;
+                        StatusMessage = string.IsNullOrWhiteSpace(result.Protocol)
+                            ? $"Successfully sent pending scan #{result.PendingId}."
+                            : $"Successfully sent pending scan #{result.PendingId} — Protocol: {result.Protocol}";
+                    }
+                    else
+                    {
+                        failed++;
+                        StatusMessage = $"Retry failed for pending scan #{result.PendingId}: {result.Error}";
+                    }
+                }
+            }
+
+            // WorkCards that exist but were not accepted by Ergani are retried using
+            // the same in-place API-log retry mechanism used by Submission Log.
+            var workCardIds = selected
+                .Where(r => r.Id > 0 && !r.SubmittedToErgani && !r.IsLocalPending)
+                .Select(r => r.Id)
+                .ToList();
+
+            if (workCardIds.Count > 0)
+            {
+                await using var db = new AppDbContext(_retryConnectionOptions());
+                var logIds = await db.ApiSubmissionLogs
+                    .Where(l => l.CompanyId == companyId &&
+                                l.WorkCardId.HasValue &&
+                                workCardIds.Contains(l.WorkCardId.Value) &&
+                                l.SubmissionType == "WorkCard" &&
+                                !l.Success)
+                    .Select(l => l.Id)
+                    .ToListAsync();
+
+                if (logIds.Count > 0)
+                {
+                    var results = await _logRetryService.RetryAsync(logIds);
+                    success += results.Count(r => r.Status == LogRetryStatus.Succeeded);
+                    failed += results.Count(r => r.Status == LogRetryStatus.Failed);
+                }
+            }
+
+            // Legacy FailedSubmission rows are still retried by the background worker.
+            // Request an immediate run when any of those rows were selected.
+            if (selected.Any(r => r.IsLocalFailed))
+            {
+                _retryService.Start();
+                _retryService.TriggerNow();
+                StatusMessage = "Retry sending requested for failed queued work cards...";
+            }
+
+            await LoadAsync();
+            foreach (var row in Records)
+                row.IsSelected = false;
+
+            if (success > 0 || failed > 0)
+                StatusMessage = $"Retry finished: {success} successfully sent, {failed} failed.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ Retry failed: {ex.Message}";
+        }
+    }
+
+    private DbContextOptions<AppDbContext> _retryConnectionOptions() => _historyDbOptions();
+
+    private DbContextOptions<AppDbContext> _historyDbOptions()
+    {
+        // Use the same configured provider/options as the history service.
+        // IConnectionStateService is intentionally not exposed by that service,
+        // so resolve it from the current app connection state via the constructor below.
+        return _connectionState.GetDbOptions();
+    }
+
+    private async Task RefreshAfterQueuedSendAsync(string employeeName, string? protocol)
+    {
+        await LoadAsync();
+        StatusMessage = string.IsNullOrWhiteSpace(protocol)
+            ? $"✅ Successfully sent {employeeName}."
+            : $"✅ Successfully sent {employeeName} — Protocol: {protocol}";
+    }
+
+    private void OnQueuedScanUpdated(object? sender, QueuedScanUpdate update)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var row = Records.FirstOrDefault(r => r.LocalPendingId == update.PendingId);
+            if (row == null)
+                return;
+
+            row.RetryAttempts = update.Attempts;
+            row.RetryError = update.Error;
+
+            if (update.Status == QueuedScanStatus.Sent)
+            {
+                row.IsLocalPending = false;
+                row.SubmittedToErgani = true;
+                row.Protocol = update.Protocol;
+                _ = RefreshAfterQueuedSendAsync(row.EmployeeFullName, update.Protocol);
+            }
+            else if (update.Status == QueuedScanStatus.Waiting)
+            {
+                StatusMessage = $"⏳ Retry sending {row.EmployeeFullName} — attempt {update.Attempts}" +
+                                (string.IsNullOrWhiteSpace(update.Error) ? "..." : $": {update.Error}");
+            }
+            else
+            {
+                row.IsLocalPending = false;
+                row.IsLocalFailed = true;
+                StatusMessage = $"❌ Ergani rejected {row.EmployeeFullName}: {update.Error}";
+            }
+        });
     }
 
     [RelayCommand]

@@ -3,6 +3,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using ErganiManager.Core.Interfaces;
@@ -65,7 +66,7 @@ public partial class SubmissionLogRow : ObservableObject
         SubmissionDate.ToString("dd/MM/yyyy HH:mm:ss");
 }
 
-public class FailedSubmissionRow
+public partial class FailedSubmissionRow : ObservableObject
 {
     public int Id { get; set; }
 
@@ -75,15 +76,14 @@ public class FailedSubmissionRow
 
     public DateTime OriginalScannedAt { get; set; }
 
-    public string FailureReason { get; set; } = string.Empty;
-
-    public string? ErrorDescription { get; set; }
-
-    public int RetryCount { get; set; }
-
-    public DateTime? LastRetryAt { get; set; }
-
-    public string? LastRetryError { get; set; }
+    [ObservableProperty] private string _failureReason = string.Empty;
+    [ObservableProperty] private string? _errorDescription;
+    [ObservableProperty] private int _retryCount;
+    [ObservableProperty] private DateTime? _lastRetryAt;
+    [ObservableProperty] private string? _lastRetryError;
+    [ObservableProperty] private string _statusText = "Waiting to send";
+    [ObservableProperty] private string? _protocol;
+    [ObservableProperty] private bool _isPending;
 
     public string ScanTimeText =>
         OriginalScannedAt.ToString("dd/MM/yyyy HH:mm:ss");
@@ -178,6 +178,11 @@ public partial class SubmissionLogViewModel
     {
         _session = session;
 
+        _retryService.QueuedScanUpdated -= OnQueuedScanUpdated;
+        _retryService.QueuedScanUpdated += OnQueuedScanUpdated;
+        _logRetryService.RetryUpdated -= OnLogRetryUpdated;
+        _logRetryService.RetryUpdated += OnLogRetryUpdated;
+
         HasActiveCompany = session.CompanyId.HasValue;
 
         NoCompanyMessage = session.CompanyId.HasValue
@@ -220,7 +225,9 @@ public partial class SubmissionLogViewModel
                 ErrorDescription = f.ErrorDescription,
                 RetryCount = f.RetryCount,
                 LastRetryAt = f.LastRetryAt,
-                LastRetryError = f.LastRetryError
+                LastRetryError = f.LastRetryError,
+                StatusText = f.Resolved ? "Resolved" : "Failed — retry pending",
+                IsPending = false
             });
         }
 
@@ -240,7 +247,9 @@ public partial class SubmissionLogViewModel
                 OriginalScannedAt = p.ScannedAt,
                 FailureReason = "Waiting to send",
                 ErrorDescription = p.LastSyncError,
-                RetryCount = p.SyncAttempts
+                RetryCount = p.SyncAttempts,
+                StatusText = string.IsNullOrWhiteSpace(p.LastSyncError) ? "Waiting to send" : "Retry waiting",
+                IsPending = true
             });
         }
 
@@ -249,6 +258,79 @@ public partial class SubmissionLogViewModel
             : string.Format(
                 Loc[L.PendingRetry],
                 FailedSubmissions.Count);
+    }
+
+    private void OnQueuedScanUpdated(object? sender, QueuedScanUpdate update)
+    {
+        if (_session?.CompanyId is null) return;
+
+        Dispatcher.UIThread.Post(async () =>
+        {
+            var row = FailedSubmissions.FirstOrDefault(r => r.IsPending && r.Id == update.PendingId);
+
+            if (update.Status == QueuedScanStatus.Retrying)
+            {
+                if (row != null)
+                {
+                    row.StatusText = $"Retrying... (attempt {Math.Max(update.Attempts, 1)})";
+                    row.RetryCount = update.Attempts;
+                    row.ErrorDescription = update.Error;
+                }
+                StatusMessage = $"Retrying queued work card #{update.PendingId}...";
+                return;
+            }
+
+            if (row != null)
+            {
+                row.RetryCount = update.Attempts;
+                row.ErrorDescription = update.Error;
+                row.Protocol = update.Protocol;
+                row.StatusText = update.Status switch
+                {
+                    QueuedScanStatus.Sent => string.IsNullOrWhiteSpace(update.Protocol)
+                        ? "Successfully sent"
+                        : $"Successfully sent — Protocol: {update.Protocol}",
+                    QueuedScanStatus.Rejected => "Rejected by Ergani",
+                    _ => "Waiting to send"
+                };
+            }
+
+            if (update.Status == QueuedScanStatus.Sent || update.Status == QueuedScanStatus.Rejected)
+            {
+                // The main ApiSubmissionLog is created/updated by the submitter. Reload both
+                // sections so this page immediately agrees with WorkCard History.
+                await LoadAsync();
+                await LoadFailedSubmissionsAsync();
+            }
+            else
+            {
+                FailedCountText = FailedSubmissions.Count == 0
+                    ? Loc[L.NoFailedPending]
+                    : string.Format(Loc[L.PendingRetry], FailedSubmissions.Count);
+            }
+        });
+    }
+
+    private void OnLogRetryUpdated(object? sender, LogRetryUpdate update)
+    {
+        if (_session?.CompanyId is null) return;
+
+        Dispatcher.UIThread.Post(async () =>
+        {
+            StatusMessage = update.Status switch
+            {
+                LogRetryStatus.Succeeded => string.IsNullOrWhiteSpace(update.Protocol)
+                    ? $"Successfully sent API log entry #{update.LogId}."
+                    : $"Successfully sent API log entry #{update.LogId} — Protocol: {update.Protocol}",
+                LogRetryStatus.Failed when update.Message == "Retrying..."
+                    => $"Retrying API log entry #{update.LogId}...",
+                LogRetryStatus.Failed => $"Retry failed for API log entry #{update.LogId}: {update.Message}",
+                _ => $"Retry skipped for API log entry #{update.LogId}: {update.Message}"
+            };
+
+            await LoadAsync();
+            await LoadFailedSubmissionsAsync();
+        });
     }
 
     [RelayCommand]
@@ -265,8 +347,9 @@ public partial class SubmissionLogViewModel
             _retryService.Start();      // no-op when already running
             _retryService.TriggerNow(); // send queued scans right now
 
-            await Task.Delay(TimeSpan.FromSeconds(3));
-
+            // The retry service now publishes state changes. Do one immediate refresh, then
+            // let the event handler keep this page synchronized while the sender runs.
+            await LoadAsync();
             await LoadFailedSubmissionsAsync();
 
             StatusMessage =

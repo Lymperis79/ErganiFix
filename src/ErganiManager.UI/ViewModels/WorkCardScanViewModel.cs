@@ -47,6 +47,10 @@ public partial class ScanResultRow : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     private string _errorDescription = string.Empty;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private int _retryAttempts;
+
     public string TimeText =>
         ScannedAt.ToString("HH:mm:ss");
 
@@ -64,9 +68,12 @@ public partial class ScanResultRow : ObservableObject
 
     public string StatusText =>
         IsPending
-            ? (string.IsNullOrEmpty(ErrorDescription)
-                ? "Sending to Ergani in the background…"
-                : $"Waiting — will retry automatically ({ErrorDescription})")
+            ? (RetryAttempts > 0
+                ? $"Retrying to Ergani — attempt {RetryAttempts}" +
+                  (string.IsNullOrEmpty(ErrorDescription) ? "…" : $" ({ErrorDescription})")
+                : (string.IsNullOrEmpty(ErrorDescription)
+                    ? "Sending to Ergani in the background…"
+                    : $"Waiting — will retry automatically ({ErrorDescription})"))
             : Success
                 ? $"Protocol: {Protocol}"
                 : ErrorDescription;
@@ -1036,6 +1043,8 @@ public partial class WorkCardScanViewModel :
             var row = RecentScans.FirstOrDefault(r => r.PendingId == update.PendingId);
             if (row == null) return;
 
+            row.RetryAttempts = update.Attempts;
+
             switch (update.Status)
             {
                 case QueuedScanStatus.Sent:
@@ -1058,17 +1067,23 @@ public partial class WorkCardScanViewModel :
             }
 
             // Keep the big message at the top in step when it belongs to the latest scan.
-            if (RecentScans.Count > 0 && ReferenceEquals(RecentScans[0], row) &&
-                update.Status != QueuedScanStatus.Waiting)
+            if (RecentScans.Count > 0 && ReferenceEquals(RecentScans[0], row))
             {
                 var title = $"{row.MovementType.ToUpper()} — {row.EmployeeName}";
 
                 if (update.Status == QueuedScanStatus.Sent)
                     ShowResponse(
                         true,
-                        $"✅ {title}",
+                        $"✅ {title} — Successfully sent",
                         $"Protocol:      {row.Protocol}\n" +
                         $"Time:          {row.ScannedAt:HH:mm:ss dd/MM/yyyy}");
+                else if (update.Status == QueuedScanStatus.Waiting)
+                    ShowResponse(
+                        false,
+                        $"⏳ Retry sending — {row.EmployeeName}",
+                        $"Attempt:       {row.RetryAttempts}\n" +
+                        $"Status:        Waiting for Ergani / internet\n" +
+                        (string.IsNullOrWhiteSpace(row.ErrorDescription) ? string.Empty : $"Reason:        {row.ErrorDescription}"));
                 else
                     ShowResponse(
                         false,

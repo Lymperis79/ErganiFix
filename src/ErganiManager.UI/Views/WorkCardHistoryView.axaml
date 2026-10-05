@@ -142,15 +142,15 @@
 
                     <!-- Options / Load -->
 
-                    <Grid ColumnDefinitions="Auto,*,Auto"
-                          ColumnSpacing="12">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto"
+                          ColumnSpacing="10">
 
                         <CheckBox Grid.Column="0"
                                   Content="{Binding Loc[EarlyDeparture]}"
                                   IsChecked="{Binding FilterEarlyDepartureOnly}"
                                   VerticalAlignment="Center" />
 
-                        <TextBlock Grid.Column="1"
+                        <TextBlock Grid.Column="2"
                                    Text="{Binding StatusMessage}"
                                    Foreground="Gray"
                                    FontSize="12"
@@ -159,7 +159,18 @@
                                    Margin="0,0,12,0"
                                    TextWrapping="Wrap" />
 
-                        <Button Grid.Column="2"
+                        <Button Grid.Column="3"
+                                Content="☑ Select retryable"
+                                Command="{Binding SelectAllRetryableCommand}"
+                                VerticalAlignment="Center" />
+
+                        <Button Grid.Column="4"
+                                Content="🔄 Retry selected"
+                                Command="{Binding RetrySelectedCommand}"
+                                Classes="accent"
+                                VerticalAlignment="Center" />
+
+                        <Button Grid.Column="1"
                                 Content="{Binding Loc[Load]}"
                                 Command="{Binding LoadCommand}"
                                 IsEnabled="{Binding !IsLoading}"
@@ -194,11 +205,20 @@
                                 CornerRadius="6"
                                 Padding="14,10">
 
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto,Auto,Auto,Auto">
+
+                                <!-- Retry selection -->
+
+                                <CheckBox Grid.Column="0"
+                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                          IsVisible="{Binding CanRetry}"
+                                          VerticalAlignment="Center"
+                                          Margin="0,0,8,0"
+                                          ToolTip.Tip="Select this failed/waiting work card for retry" />
 
                                 <!-- Movement icon -->
 
-                                <TextBlock Grid.Column="0"
+                                <TextBlock Grid.Column="1"
                                            Width="28"
                                            FontSize="18"
                                            VerticalAlignment="Center"
@@ -207,7 +227,7 @@
 
                                 <!-- Employee + branch -->
 
-                                <StackPanel Grid.Column="1"
+                                <StackPanel Grid.Column="2"
                                             VerticalAlignment="Center">
 
                                     <TextBlock Text="{Binding EmployeeFullName}"
@@ -222,7 +242,7 @@
 
                                 <!-- Date/time -->
 
-                                <TextBlock Grid.Column="2"
+                                <TextBlock Grid.Column="3"
                                            Text="{Binding MovementDateTime,
                                                   StringFormat='{}{0:dd/MM/yyyy HH:mm}'}"
                                            VerticalAlignment="Center"
@@ -232,7 +252,7 @@
 
                                 <!-- Early departure -->
 
-                                <Border Grid.Column="3"
+                                <Border Grid.Column="4"
                                         IsVisible="{Binding WasEarlyDeparture}"
                                         Background="#4E342E"
                                         CornerRadius="10"
@@ -247,32 +267,26 @@
 
                                 </Border>
 
-                                <!-- Ergani status -->
+                                <!-- Ergani / offline status -->
 
-                                <Border Grid.Column="4"
+                                <Border Grid.Column="5"
                                         CornerRadius="10"
                                         Padding="8,3"
                                         VerticalAlignment="Center"
-                                        Margin="0,0,8,0"
-                                        Background="{Binding SubmittedToErgani,
-                                            Converter={x:Static vm:BoolToBackgroundConverter.Instance}}">
+                                        Margin="0,0,8,0">
 
-                                    <TextBlock Text="{Binding SubmittedToErgani,
-                                            Converter={x:Static vm:SubmittedTextConverter.Instance}}"
+                                    <TextBlock Text="{Binding StatusText}"
                                                FontSize="11"
-                                               Foreground="White" />
+                                               Foreground="White"
+                                               TextWrapping="Wrap" />
 
                                 </Border>
 
                                 <!-- Protocol -->
 
-                                <TextBlock Grid.Column="5"
-                                           Text="{Binding Protocol}"
-                                           FontSize="11"
-                                           Foreground="#888888"
-                                           VerticalAlignment="Center"
-                                           IsVisible="{Binding Protocol,
-                                               Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <TextBlock Grid.Column="6" Text="{Binding Protocol}" FontSize="11" Foreground="#888888" VerticalAlignment="Center" IsVisible="{Binding Protocol, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <Button Grid.Column="7" Content="Response" Tag="{Binding}" Click="OnResponseClick" IsEnabled="{Binding SubmittedToErgani}" Margin="6,0" />
+                                <Button Grid.Column="8" Content="PDF" Tag="{Binding}" Click="OnPdfClick" IsEnabled="{Binding SubmittedToErgani}" />
 
                             </Grid>
 
@@ -285,6 +299,16 @@
             </ItemsControl>
 
         </StackPanel>
+
+    <Border IsVisible="{Binding IsResponseOpen}" Background="#AA000000" ZIndex="100">
+        <Border Background="#1E2128" CornerRadius="12" Padding="20" Width="800" Height="600" VerticalAlignment="Center" HorizontalAlignment="Center">
+            <Grid RowDefinitions="Auto,*,Auto" RowSpacing="12">
+                <TextBlock Grid.Row="0" Text="{Binding ResponseTitle}" FontSize="17" FontWeight="Bold" />
+                <TextBox Grid.Row="1" Text="{Binding ResponseText}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap" ScrollViewer.VerticalScrollBarVisibility="{x:Static ScrollBarVisibility.Auto}" ScrollViewer.HorizontalScrollBarVisibility="{x:Static ScrollBarVisibility.Auto}" FontFamily="Consolas" />
+                <Button Grid.Row="2" Content="Close" Command="{Binding CloseResponseCommand}" HorizontalAlignment="Right" Width="100" />
+            </Grid>
+        </Border>
+    </Border>
 
     </StackPanel>
 
