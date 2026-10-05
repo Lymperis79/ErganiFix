@@ -37,6 +37,9 @@ public class ApiSubmissionLog
 
     /// <summary>The WorkCard this attempt belongs to, so retries update one row instead of adding new ones.</summary>
     public int? WorkCardId { get; set; }
+
+    /// <summary>For DailySchedule submissions: the schedule day this attempt was for.</summary>
+    public DateOnly? ScheduleDate { get; set; }
 }
 
 public class AppLog

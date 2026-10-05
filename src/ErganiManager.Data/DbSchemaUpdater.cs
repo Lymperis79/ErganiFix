@@ -31,6 +31,11 @@ public static class DbSchemaUpdater
             "ALTER TABLE ApiSubmissionLogs ADD COLUMN WorkCardId INTEGER NULL",
             "ALTER TABLE ApiSubmissionLogs ADD WorkCardId int NULL",
             "ALTER TABLE ApiSubmissionLogs ADD COLUMN WorkCardId INT NULL"),
+
+        new("ApiSubmissionLogs", "ScheduleDate",
+            "ALTER TABLE ApiSubmissionLogs ADD COLUMN ScheduleDate TEXT NULL",
+            "ALTER TABLE ApiSubmissionLogs ADD ScheduleDate date NULL",
+            "ALTER TABLE ApiSubmissionLogs ADD COLUMN ScheduleDate DATE NULL"),
     };
 
     private static string? _lastCheckedKey;

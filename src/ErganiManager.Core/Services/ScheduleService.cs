@@ -134,6 +134,54 @@ public class ScheduleService : IScheduleService
         }
     }
 
+    public async Task<int> DeleteDaysAsync(int employeeId, IReadOnlyCollection<DateOnly> dates)
+    {
+        if (dates.Count == 0) return 0;
+
+        await using var db = OpenDb();
+
+        var wanted = dates.ToHashSet();
+        var from = wanted.Min();
+        var to   = wanted.Max();
+
+        var inRange = await db.Schedules
+            .Where(s => s.EmployeeId == employeeId && s.ScheduleDate >= from && s.ScheduleDate <= to)
+            .ToListAsync();
+
+        var toRemove = inRange.Where(s => wanted.Contains(s.ScheduleDate)).ToList();
+        if (toRemove.Count == 0) return 0;
+
+        db.Schedules.RemoveRange(toRemove);
+        await db.SaveChangesAsync();
+        return toRemove.Count;
+    }
+
+    public async Task<List<ScheduleSubmissionLogDto>> GetSubmissionLogAsync(
+        int companyId, int employeeId, int take = 200)
+    {
+        await using var db = OpenDb();
+
+        var rows = await db.ApiSubmissionLogs
+            .Where(l => l.CompanyId == companyId
+                     && l.EmployeeId == employeeId
+                     && l.SubmissionType == "DailySchedule")
+            .OrderByDescending(l => l.SubmissionDate)
+            .Take(take)
+            .ToListAsync();
+
+        return rows.Select(l => new ScheduleSubmissionLogDto
+        {
+            Id              = l.Id,
+            ScheduleDate    = l.ScheduleDate,
+            SubmissionDate  = l.SubmissionDate,
+            Success         = l.Success,
+            Protocol        = l.Protocol,
+            ErrorMessage    = l.ErrorMessage,
+            HttpStatusCode  = l.HttpStatusCode,
+            ResponseRawJson = l.ResponseRawJson
+        }).ToList();
+    }
+
     public async Task<int> BulkSetAsync(
         int employeeId, int branchId, DateOnly fromDate, DateOnly toDate,
         AppWorkType workType, TimeOnly? startTime, TimeOnly? endTime, IReadOnlySet<DayOfWeek>? onlyDaysOfWeek = null)

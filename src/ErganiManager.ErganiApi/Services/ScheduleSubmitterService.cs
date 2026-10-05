@@ -33,31 +33,47 @@ public class ScheduleSubmitterService : IScheduleSubmitter
 
     private AppDbContext OpenDb() => new AppDbContext(_connectionState.GetDbOptions());
 
-    public async Task<(int Submitted, string? Error)> SubmitScheduleDaysAsync(
+    public async Task<ScheduleSubmitResult> SubmitScheduleDaysAsync(
         int companyId, IReadOnlyList<ScheduleDayDto> days)
     {
-        if (days.Count == 0) return (0, null);
+        var outcome = new ScheduleSubmitResult();
+        if (days.Count == 0) return outcome;
 
         await using var db = OpenDb();
         var company = await db.Companies.FindAsync(companyId);
-        if (company == null) return (0, "Company not found.");
+        if (company == null)
+        {
+            outcome.Error = "Company not found.";
+            return outcome;
+        }
 
         var credentials = BuildCredentials(company);
-        var byBranch    = days.GroupBy(d => d.BranchId);
-        int submitted   = 0;
+        var stopped     = false;   // Ergani unreachable — no point trying the remaining dates
 
-        foreach (var branchGroup in byBranch)
+        foreach (var branchGroup in days.GroupBy(d => d.BranchId))
         {
             var branch = await db.Branches.FindAsync(branchGroup.Key);
-            if (branch == null) continue;
+            if (branch == null)
+            {
+                foreach (var d in branchGroup)
+                    AddDayResult(outcome, d, false, null, "Branch not found.");
+                continue;
+            }
 
             var employeeIds = branchGroup.Select(d => d.EmployeeId).Distinct().ToList();
             var employees   = await db.Employees
                 .Where(e => employeeIds.Contains(e.Id)).ToListAsync();
 
-            // Group by date — one submission per date
-            foreach (var dateGroup in branchGroup.GroupBy(d => d.ScheduleDate))
+            // One Ergani submission per date.
+            foreach (var dateGroup in branchGroup.GroupBy(d => d.ScheduleDate).OrderBy(g => g.Key))
             {
+                if (stopped)
+                {
+                    foreach (var d in dateGroup)
+                        AddDayResult(outcome, d, false, null, "Not sent — Ergani was unreachable.");
+                    continue;
+                }
+
                 var scheduleEntries = dateGroup
                     .Join(employees, d => d.EmployeeId, e => e.Id,
                         (d, e) => new EmployeeDailySchedule
@@ -70,6 +86,13 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                         })
                     .ToList();
 
+                if (scheduleEntries.Count == 0)
+                {
+                    foreach (var d in dateGroup)
+                        AddDayResult(outcome, d, false, null, "Employee not found.");
+                    continue;
+                }
+
                 var submission = new CompanyDailyScheduleSubmission
                 {
                     EmployerTaxIdentificationNumber = company.TaxId,
@@ -80,34 +103,80 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                     EmployeeSchedules               = scheduleEntries
                 };
 
-                var result = await _erganiClient.SubmitDailyScheduleAsync(
+                var result   = await _erganiClient.SubmitDailyScheduleAsync(
                     credentials, new List<CompanyDailyScheduleSubmission> { submission });
+                var response = result.Data?.FirstOrDefault();
 
-                if (result.Success)
+                // A 200 response that carries a description but no protocol is an Ergani business error.
+                var businessError = result.IsBusinessError || response is { IsBusinessError: true };
+                var success       = result.Success && !businessError;
+                var error         = success
+                    ? null
+                    : (result.ErrorMessage ?? response?.Description ?? "Ergani schedule submission failed.");
+
+                // Audit log — one row per attempt, successful or not (same table the work cards use).
+                var distinctEmployees = dateGroup.Select(d => d.EmployeeId).Distinct().ToList();
+                db.ApiSubmissionLogs.Add(new ApiSubmissionLog
                 {
-                    var protocol = result.Data?.FirstOrDefault()?.Protocol;
+                    CompanyId          = companyId,
+                    EmployeeId         = distinctEmployees.Count == 1 ? distinctEmployees[0] : null,
+                    SubmissionType     = "DailySchedule",
+                    ScheduleDate       = dateGroup.Key,
+                    RequestPayloadJson = result.RequestPayloadJson,
+                    ResponseRawJson    = result.ResponseRawJson,
+                    SubmissionId       = response?.SubmissionId,
+                    Protocol           = response?.Protocol,
+                    SubmissionDate     = DateTime.UtcNow,
+                    HttpStatusCode     = result.HttpStatusCode,
+                    Success            = success,
+                    ErrorMessage       = error,
+                    DurationMs         = result.DurationMs
+                });
+
+                if (success)
+                {
                     foreach (var day in dateGroup)
                     {
                         var entity = await db.Schedules.FindAsync(day.Id);
                         if (entity != null)
                         {
                             entity.SubmittedToErgani = true;
-                            entity.Protocol          = protocol;
+                            entity.SubmissionId      = response?.SubmissionId;
+                            entity.Protocol          = response?.Protocol;
                         }
                     }
-                    await db.SaveChangesAsync();
-                    submitted += dateGroup.Count();
                 }
-                else
+
+                await db.SaveChangesAsync();
+
+                foreach (var day in dateGroup)
+                    AddDayResult(outcome, day, success, response?.Protocol, error);
+
+                if (!success)
                 {
                     _logger.LogWarning("Schedule submit failed for branch {B} date {D}: {E}",
-                        branch.Id, dateGroup.Key, result.ErrorMessage);
-                    return (submitted, result.ErrorMessage);
+                        branch.Id, dateGroup.Key, error);
+
+                    if (result.IsServiceUnavailable) stopped = true;
                 }
             }
         }
 
-        return (submitted, null);
+        return outcome;
+    }
+
+    private static void AddDayResult(
+        ScheduleSubmitResult outcome, ScheduleDayDto day, bool success, string? protocol, string? error)
+    {
+        outcome.Days.Add(new ScheduleSubmitDayResult
+        {
+            EmployeeId = day.EmployeeId,
+            Date       = day.ScheduleDate,
+            Success    = success,
+            Protocol   = protocol,
+            Error      = error
+        });
+        if (success) outcome.Submitted++; else outcome.Failed++;
     }
 
     public async Task<(int Submitted, string? Error)> SubmitOvertimeDaysAsync(
