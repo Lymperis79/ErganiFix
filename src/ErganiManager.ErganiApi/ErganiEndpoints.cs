@@ -42,7 +42,7 @@ public static class ErganiEndpoints
         "Documents/WTOWeek";
 
     public const string OvertimeSubmitPath =
-        "Documents/WRKOvertime";
+        "Documents/WTOOv";
 
     // ============================================================
     // LOOKUP

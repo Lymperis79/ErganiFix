@@ -17,13 +17,15 @@ public enum QueuedScanStatus
 {
     /// <summary>Ergani accepted the card.</summary>
     Sent,
+    /// <summary>A queued work card is currently being sent to Ergani.</summary>
+    Retrying,
     /// <summary>Not delivered yet (no connection / Ergani down) — will be retried automatically.</summary>
     Waiting,
     /// <summary>Ergani rejected the card; it needs attention (see the API log).</summary>
     Rejected
 }
 
-public record QueuedScanUpdate(int PendingId, QueuedScanStatus Status, string? Protocol, string? Error);
+public record QueuedScanUpdate(int PendingId, QueuedScanStatus Status, string? Protocol, string? Error, int Attempts = 0);
 
 public class ErganiRetryService
 {
@@ -33,9 +35,9 @@ public class ErganiRetryService
     /// </summary>
     public event EventHandler<QueuedScanUpdate>? QueuedScanUpdated;
 
-    private void Notify(int pendingId, QueuedScanStatus status, string? protocol, string? error)
+    private void Notify(int pendingId, QueuedScanStatus status, string? protocol, string? error, int attempts = 0)
     {
-        try { QueuedScanUpdated?.Invoke(this, new QueuedScanUpdate(pendingId, status, protocol, error)); }
+        try { QueuedScanUpdated?.Invoke(this, new QueuedScanUpdate(pendingId, status, protocol, error, attempts)); }
         catch (Exception ex) { _logger.LogWarning(ex, "QueuedScanUpdated handler failed."); }
     }
 
@@ -55,6 +57,9 @@ public class ErganiRetryService
     // Lets the scan screens wake the loop immediately after queuing a scan, instead of
     // waiting for the next interval.
     private readonly SemaphoreSlim _wake = new(0, 1);
+
+    // Prevent a manual selected retry from racing the automatic queue worker.
+    private readonly SemaphoreSlim _pendingGate = new(1, 1);
 
     /// <summary>
     /// Ask the background loop to run right now (e.g. a scan was just saved, or the user
@@ -308,6 +313,20 @@ public class ErganiRetryService
     private async Task FlushPendingSubmissionsAsync(
         Company company, LocalCache.LocalCacheDbContext cache, CancellationToken ct)
     {
+        await _pendingGate.WaitAsync(ct);
+        try
+        {
+            await FlushPendingSubmissionsCoreAsync(company, cache, ct);
+        }
+        finally
+        {
+            _pendingGate.Release();
+        }
+    }
+
+    private async Task FlushPendingSubmissionsCoreAsync(
+        Company company, LocalCache.LocalCacheDbContext cache, CancellationToken ct)
+    {
         var pending = await cache.PendingSubmissions
             .Where(p => p.CompanyId == company.Id && !p.Synced)
             .OrderBy(p => p.ScannedAt)
@@ -325,6 +344,8 @@ public class ErganiRetryService
             {
                 // The age of the scan decides f_aitiologia inside the submitter
                 // (empty within 10 minutes, a justification code after that).
+                Notify(item.Id, QueuedScanStatus.Retrying, null, item.LastSyncError, item.SyncAttempts);
+
                 var outcome = await _workCardSubmitter.SubmitAsync(new WorkCardSubmissionRequest
                 {
                     EmployeeId = item.EmployeeId, CompanyId = item.CompanyId,
@@ -340,7 +361,7 @@ public class ErganiRetryService
                     item.SyncedAt = DateTime.UtcNow;
                     item.LastSyncError = null;
                     await cache.SaveChangesAsync(ct);
-                    Notify(item.Id, QueuedScanStatus.Sent, outcome.Protocol, null);
+                    Notify(item.Id, QueuedScanStatus.Sent, outcome.Protocol, null, item.SyncAttempts);
                 }
                 else if (outcome.IsBusinessError)
                 {
@@ -350,7 +371,7 @@ public class ErganiRetryService
                     item.LastSyncError = outcome.ErrorMessage;
                     await cache.SaveChangesAsync(ct);
                     _logger.LogWarning("Ergani rejected queued scan {Id}: {Error}", item.Id, outcome.ErrorMessage);
-                    Notify(item.Id, QueuedScanStatus.Rejected, null, outcome.ErrorMessage);
+                    Notify(item.Id, QueuedScanStatus.Rejected, null, outcome.ErrorMessage, item.SyncAttempts);
                 }
                 else
                 {
@@ -358,7 +379,7 @@ public class ErganiRetryService
                     item.LastSyncError = outcome.ErrorMessage;
                     await cache.SaveChangesAsync(ct);
                     _logger.LogInformation("Queued scan {Id} not delivered yet: {Error}", item.Id, outcome.ErrorMessage);
-                    Notify(item.Id, QueuedScanStatus.Waiting, null, outcome.ErrorMessage);
+                    Notify(item.Id, QueuedScanStatus.Waiting, null, outcome.ErrorMessage, item.SyncAttempts);
                     break;
                 }
 
@@ -371,9 +392,98 @@ public class ErganiRetryService
                 item.LastSyncError = ex.Message;
                 await cache.SaveChangesAsync(ct);
                 _logger.LogError(ex, "Exception sending queued scan {Id}; will retry.", item.Id);
-                Notify(item.Id, QueuedScanStatus.Waiting, null, ex.Message);
+                Notify(item.Id, QueuedScanStatus.Waiting, null, ex.Message, item.SyncAttempts);
                 break;
             }
+        }
+
+
+    }
+
+    /// <summary>
+    /// Immediately retries only the selected locally queued scans. The normal background
+    /// worker remains responsible for automatic retries; the gate prevents the two paths
+    /// from sending the same PendingSubmission concurrently.
+    /// </summary>
+    public async Task<IReadOnlyList<(int PendingId, bool Success, string? Protocol, string? Error)>>
+        RetryPendingAsync(IEnumerable<int> pendingIds, CancellationToken ct = default)
+    {
+        var ids = pendingIds.Distinct().ToList();
+        var results = new List<(int PendingId, bool Success, string? Protocol, string? Error)>();
+        if (ids.Count == 0)
+            return results;
+
+        await _pendingGate.WaitAsync(ct);
+        try
+        {
+            using var cache = LocalCacheDbContextFactory.Create();
+            var items = await cache.PendingSubmissions
+                .Where(p => ids.Contains(p.Id) && !p.Synced)
+                .OrderBy(p => p.ScannedAt)
+                .ToListAsync(ct);
+
+            foreach (var item in items)
+            {
+                ct.ThrowIfCancellationRequested();
+                item.SyncAttempts++;
+
+                try
+                {
+                    Notify(item.Id, QueuedScanStatus.Retrying, null, item.LastSyncError, item.SyncAttempts);
+
+                    var outcome = await _workCardSubmitter.SubmitAsync(new WorkCardSubmissionRequest
+                    {
+                        EmployeeId = item.EmployeeId,
+                        CompanyId = item.CompanyId,
+                        BranchId = item.BranchId,
+                        MovementType = item.MovementType,
+                        MovementDateTime = item.ScannedAt
+                    });
+
+                    if (outcome.Success)
+                    {
+                        item.Synced = true;
+                        item.SyncedAt = DateTime.UtcNow;
+                        item.LastSyncError = null;
+                        results.Add((item.Id, true, outcome.Protocol, null));
+                        Notify(item.Id, QueuedScanStatus.Sent, outcome.Protocol, null, item.SyncAttempts);
+                    }
+                    else if (outcome.IsBusinessError)
+                    {
+                        // Ergani rejected the card; do not keep hammering the same invalid request.
+                        item.Synced = true;
+                        item.SyncedAt = DateTime.UtcNow;
+                        item.LastSyncError = outcome.ErrorMessage;
+                        results.Add((item.Id, false, null, outcome.ErrorMessage));
+                        Notify(item.Id, QueuedScanStatus.Rejected, null, outcome.ErrorMessage, item.SyncAttempts);
+                    }
+                    else
+                    {
+                        item.LastSyncError = outcome.ErrorMessage;
+                        results.Add((item.Id, false, null, outcome.ErrorMessage));
+                        Notify(item.Id, QueuedScanStatus.Waiting, null, outcome.ErrorMessage, item.SyncAttempts);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    item.LastSyncError = ex.Message;
+                    results.Add((item.Id, false, null, ex.Message));
+                    Notify(item.Id, QueuedScanStatus.Waiting, null, ex.Message, item.SyncAttempts);
+                }
+
+                await cache.SaveChangesAsync(ct);
+            }
+
+            // IDs that disappeared because the background worker already sent them are treated
+            // as successfully handled; the history view will reload their WorkCard row.
+            foreach (var missing in ids.Except(items.Select(i => i.Id)))
+                results.Add((missing, true, null, "Already sent or no longer queued."));
+
+            return results;
+        }
+        finally
+        {
+            _pendingGate.Release();
         }
     }
 }

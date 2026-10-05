@@ -27,6 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IWorkCardSubmitter, ErganiApiService>();
         services.AddTransient<WorkCardLogRetryService>();
         services.AddTransient<IScheduleSubmitter, ScheduleSubmitterService>();
+        services.AddTransient<IErganiDocumentService, ErganiDocumentService>();
+        services.AddTransient<IOvertimeSubmitter, OvertimeSubmitterService>();
         services.AddTransient<IEmailAlertService, EmailAlertService>();
         services.AddTransient<IErganiDataImportService, ErganiDataImportService>();
 

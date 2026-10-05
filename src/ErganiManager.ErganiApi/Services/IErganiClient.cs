@@ -7,6 +7,15 @@ using ErganiManager.ErganiApi.Models;
 
 namespace ErganiManager.ErganiApi.Services;
 
+public class ErganiDocumentResult
+{
+    public bool Success { get; set; }
+    public byte[]? PdfBytes { get; set; }
+    public string? RawResponse { get; set; }
+    public int? HttpStatusCode { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
 public class ErganiCallResult<TResponse>
 {
     public bool Success { get; set; }
@@ -60,4 +69,7 @@ public interface IErganiClient
 
     Task<List<ErganiSubmissionType>> GetSubmissionsLookupAsync(
         ErganiCredentials credentials, CancellationToken ct = default);
+
+    Task<ErganiDocumentResult> GetDocumentAsync(
+        ErganiCredentials credentials, string submissionCode, string protocol, DateOnly submittedDate, CancellationToken ct = default);
 }

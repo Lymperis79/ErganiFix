@@ -124,6 +124,9 @@ public class OvertimeService : IOvertimeService
         IsCancelled          = o.IsCancelled,
         SubmittedToErgani    = o.SubmittedToErgani,
         Protocol             = o.Protocol,
+        SubmissionId         = o.SubmissionId,
+        ResponseRawJson      = o.ResponseRawJson,
+        SubmittedDate        = o.SubmittedDate,
         CreatedAt            = o.CreatedAt
     };
 }

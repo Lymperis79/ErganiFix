@@ -13,6 +13,10 @@ public static class DbSchemaUpdater
 
     private static readonly ColumnPatch[] Patches =
     {
+        new("Overtimes", "ResponseRawJson", "ALTER TABLE Overtimes ADD COLUMN ResponseRawJson TEXT NULL", "ALTER TABLE Overtimes ADD ResponseRawJson nvarchar(max) NULL", "ALTER TABLE Overtimes ADD COLUMN ResponseRawJson LONGTEXT NULL"),
+        new("Overtimes", "RequestPayloadJson", "ALTER TABLE Overtimes ADD COLUMN RequestPayloadJson TEXT NULL", "ALTER TABLE Overtimes ADD RequestPayloadJson nvarchar(max) NULL", "ALTER TABLE Overtimes ADD COLUMN RequestPayloadJson LONGTEXT NULL"),
+        new("Overtimes", "SubmittedDate", "ALTER TABLE Overtimes ADD COLUMN SubmittedDate TEXT NULL", "ALTER TABLE Overtimes ADD SubmittedDate date NULL", "ALTER TABLE Overtimes ADD COLUMN SubmittedDate DATE NULL"),
+        new("Overtimes", "HttpStatusCode", "ALTER TABLE Overtimes ADD COLUMN HttpStatusCode INTEGER NULL", "ALTER TABLE Overtimes ADD HttpStatusCode int NULL", "ALTER TABLE Overtimes ADD COLUMN HttpStatusCode INT NULL"),
         new("ApiSubmissionLogs", "RetryCount",
             "ALTER TABLE ApiSubmissionLogs ADD COLUMN RetryCount INTEGER NOT NULL DEFAULT 0",
             "ALTER TABLE ApiSubmissionLogs ADD RetryCount int NOT NULL CONSTRAINT DF_ApiSubmissionLogs_RetryCount DEFAULT 0",

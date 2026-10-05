@@ -138,12 +138,16 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                 BusinessBranchNumber        = branch.BranchNumber,
                 SepeServiceCode             = branch.SepeServiceCode,
                 BusinessPrimaryActivityCode = branch.ActivityCode,
+                BusinessBranchActivityCode  = branch.ActivityCode,
                 KallikratisMunicipalCode    = branch.KallikratisMunicipalCode,
+                LegalRepresentativeTaxIdentificationNumber = company.TaxId,
                 EmployeeOvertimes = new List<OvertimeEntry>
                 {
                     new()
                     {
                         EmployeeTaxIdentificationNumber = employee.TaxId,
+                        EmployeeSocialSecurityNumber    = employee.SocialSecurityNumber,
+                        EmployeeProfessionCode          = employee.ProfessionCode,
                         EmployeeLastName                = employee.LastName,
                         EmployeeFirstName               = employee.FirstName,
                         OvertimeDate                    = day.ScheduleDate,
@@ -206,11 +210,11 @@ public class ScheduleSubmitterService : IScheduleSubmitter
             {
                 WorkDayType = day.WorkType switch
                 {
-                    AppWorkType.Home   => "WORK_FROM_HOME",
-                    AppWorkType.Office => "WORK_FROM_OFFICE",
-                    AppWorkType.Rest   => "REST",
-                    AppWorkType.Absent => "ABSENT",
-                    _                  => "WORK_FROM_OFFICE"
+                    AppWorkType.Home   => "ΤΗΛ",
+                    AppWorkType.Office => "ΕΡΓ",
+                    AppWorkType.Rest   => "ΑΝ",
+                    AppWorkType.Absent => "ΜΕ",
+                    _                  => "ΕΡΓ"
                 },
                 StartTime = day.StartTime.Value,
                 EndTime   = day.EndTime.Value

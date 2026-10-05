@@ -17,6 +17,8 @@ public enum LogRetryStatus { Succeeded, Failed, Skipped }
 
 public record LogRetryResult(int LogId, LogRetryStatus Status, string? Message);
 
+public record LogRetryUpdate(int LogId, LogRetryStatus Status, string? Message, int RetryCount = 0, string? Protocol = null);
+
 /// <summary>
 /// Manual retry of work cards that failed to upload, driven from the API Log page.
 ///
@@ -34,6 +36,15 @@ public record LogRetryResult(int LogId, LogRetryStatus Status, string? Message);
 /// </summary>
 public class WorkCardLogRetryService
 {
+    /// <summary>Raised whenever a manual API-log retry changes state.</summary>
+    public event EventHandler<LogRetryUpdate>? RetryUpdated;
+
+    private void Notify(int logId, LogRetryStatus status, string? message, int retryCount = 0, string? protocol = null)
+    {
+        try { RetryUpdated?.Invoke(this, new LogRetryUpdate(logId, status, message, retryCount, protocol)); }
+        catch (Exception ex) { _logger.LogWarning(ex, "API-log retry notification failed."); }
+    }
+
     // One retry batch at a time, so a double-click can never send the same card twice.
     private static readonly SemaphoreSlim Gate = new(1, 1);
 
@@ -176,6 +187,8 @@ public class WorkCardLogRetryService
             BaseUrl  = company.ErganiBaseUrl
         };
 
+        Notify(logId, LogRetryStatus.Failed, "Retrying...", log.RetryCount, log.Protocol);
+
         ErganiCallResult<List<ErganiSubmissionResponse>> call;
         try
         {
@@ -193,6 +206,7 @@ public class WorkCardLogRetryService
             log.LastRetryAt = DateTime.UtcNow;
             log.ErrorMessage = ex.Message;
             await db.SaveChangesAsync(ct);
+            Notify(logId, LogRetryStatus.Failed, ex.Message, log.RetryCount, log.Protocol);
             return new(logId, LogRetryStatus.Failed, ex.Message);
         }
 
@@ -221,6 +235,9 @@ public class WorkCardLogRetryService
         _logger.LogInformation(
             "Retry #{Retry} of log entry {LogId}: {Outcome}.",
             log.RetryCount, logId, ok ? "succeeded" : "failed");
+
+        Notify(logId, ok ? LogRetryStatus.Succeeded : LogRetryStatus.Failed,
+            log.ErrorMessage, log.RetryCount, log.Protocol);
 
         return new(logId, ok ? LogRetryStatus.Succeeded : LogRetryStatus.Failed, log.ErrorMessage);
     }
