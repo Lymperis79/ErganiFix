@@ -4052,11 +4052,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
+      "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
       "projectName": "ErganiManager.Data",
-      "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
+      "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
       "packagesPath": "C:\\Users\\ThinkPad\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\obj\\",
+      "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\obj\\",
       "projectStyle": "PackageReference",
       "centralPackageVersionsManagementEnabled": true,
       "fallbackFolders": [
