@@ -17,14 +17,17 @@ public class ScheduleSubmitterService : IScheduleSubmitter
     private readonly IErganiClient           _erganiClient;
     private readonly IConnectionStateService _connectionState;
     private readonly ICredentialProtector    _credentialProtector;
+    private readonly IOvertimeSubmitter      _overtimeSubmitter;
     private readonly ILogger<ScheduleSubmitterService> _logger;
 
     public ScheduleSubmitterService(
         IErganiClient erganiClient,
         IConnectionStateService connectionState,
         ICredentialProtector credentialProtector,
+        IOvertimeSubmitter overtimeSubmitter,
         ILogger<ScheduleSubmitterService> logger)
     {
+        _overtimeSubmitter   = overtimeSubmitter;
         _erganiClient        = erganiClient;
         _connectionState     = connectionState;
         _credentialProtector = credentialProtector;
@@ -150,7 +153,17 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                 await db.SaveChangesAsync();
 
                 foreach (var day in dateGroup)
-                    AddDayResult(outcome, day, success, response?.Protocol, error);
+                {
+                    var dayResult = AddDayResult(outcome, day, success, response?.Protocol, error);
+
+                    // Hours over 8: the schedule above carried only the first 8h — send the rest as overtime.
+                    if (success && ScheduleHours.GetOvertimeRange(day.StartTime, day.EndTime) is { } range
+                        && day.WorkType is AppWorkType.Office or AppWorkType.Home)
+                    {
+                        await SubmitOvertimePartAsync(db, companyId, day, range, dayResult);
+                        if (dayResult.OvertimeSubmitted) outcome.OvertimeSubmitted++; else outcome.OvertimeFailed++;
+                    }
+                }
 
                 if (!success)
                 {
@@ -165,18 +178,117 @@ public class ScheduleSubmitterService : IScheduleSubmitter
         return outcome;
     }
 
-    private static void AddDayResult(
+    private static ScheduleSubmitDayResult AddDayResult(
         ScheduleSubmitResult outcome, ScheduleDayDto day, bool success, string? protocol, string? error)
     {
-        outcome.Days.Add(new ScheduleSubmitDayResult
+        var result = new ScheduleSubmitDayResult
         {
             EmployeeId = day.EmployeeId,
             Date       = day.ScheduleDate,
             Success    = success,
             Protocol   = protocol,
             Error      = error
-        });
+        };
+        outcome.Days.Add(result);
         if (success) outcome.Submitted++; else outcome.Failed++;
+        return result;
+    }
+
+    /// <summary>Creates (or reuses) the Overtime record for the hours over 8 and submits it through the
+    /// normal overtime path, so it is logged and — if Ergani refuses it — can be retried from the
+    /// Overtime page.</summary>
+    private async Task SubmitOvertimePartAsync(
+        AppDbContext db, int companyId, ScheduleDayDto day,
+        (TimeOnly From, TimeOnly To) range, ScheduleSubmitDayResult dayResult)
+    {
+        dayResult.OvertimeFrom = range.From;
+        dayResult.OvertimeTo   = range.To;
+
+        try
+        {
+            var existing = await db.Overtimes.FirstOrDefaultAsync(o =>
+                o.EmployeeId == day.EmployeeId && o.OvertimeDate == day.ScheduleDate &&
+                o.StartTime == range.From && o.EndTime == range.To && !o.IsCancelled);
+
+            if (existing is { SubmittedToErgani: true })
+            {
+                dayResult.OvertimeSubmitted = true;
+                dayResult.OvertimeProtocol  = existing.Protocol;
+                return;
+            }
+
+            if (existing == null)
+            {
+                var employee = await db.Employees.FindAsync(day.EmployeeId);
+                if (employee == null) { dayResult.OvertimeError = "Employee not found."; return; }
+
+                existing = new Overtime
+                {
+                    EmployeeId           = day.EmployeeId,
+                    BranchId             = day.BranchId,
+                    OvertimeDate         = day.ScheduleDate,
+                    StartTime            = range.From,
+                    EndTime              = range.To,
+                    Justification        = OvertimeJustification.ExceptionalWorkload,
+                    WeeklyWorkdaysNumber = employee.WeeklyWorkdays,
+                    CreatedAt            = DateTime.UtcNow
+                };
+                db.Overtimes.Add(existing);
+                await db.SaveChangesAsync();
+            }
+
+            var ot = await _overtimeSubmitter.SubmitAsync(companyId, new[] { existing.Id });
+            dayResult.OvertimeSubmitted = ot.Success;
+            dayResult.OvertimeProtocol  = ot.Protocol;
+            dayResult.OvertimeError     = ot.Success ? null : (ot.ErrorMessage ?? "Overtime submission failed.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Overtime part of schedule {D} failed for employee {E}", day.ScheduleDate, day.EmployeeId);
+            dayResult.OvertimeError = ex.Message;
+        }
+    }
+
+    public async Task<ScheduleSubmitResult> SubmitOvertimeFromScheduleAsync(
+        int companyId, IReadOnlyList<ScheduleDayDto> days)
+    {
+        var outcome = new ScheduleSubmitResult();
+        if (days.Count == 0) return outcome;
+
+        await using var db = OpenDb();
+
+        foreach (var day in days.Where(d => d.BranchId > 0).OrderBy(d => d.ScheduleDate))
+        {
+            var scheduled = day.WorkType is AppWorkType.Office or AppWorkType.Home
+                ? ScheduleHours.GetOvertimeRange(day.StartTime, day.EndTime)
+                : null;
+            var range = scheduled ?? GetClockedOvertimeRange(day);
+            if (range is not { } r) continue;
+
+            var dayResult = new ScheduleSubmitDayResult
+            {
+                EmployeeId = day.EmployeeId,
+                Date       = day.ScheduleDate,
+                Success    = true
+            };
+            outcome.Days.Add(dayResult);
+
+            await SubmitOvertimePartAsync(db, companyId, day, r, dayResult);
+            if (dayResult.OvertimeSubmitted) outcome.OvertimeSubmitted++; else outcome.OvertimeFailed++;
+        }
+
+        return outcome;
+    }
+
+    /// <summary>Fallback when the schedule has no hours over 8: use the clocked-in times.</summary>
+    private static (TimeOnly From, TimeOnly To)? GetClockedOvertimeRange(ScheduleDayDto day)
+    {
+        if (!day.ActualArrival.HasValue || !day.ActualDeparture.HasValue) return null;
+        if ((day.ActualDeparture.Value - day.ActualArrival.Value).TotalHours <= ScheduleHours.NormalDailyHours) return null;
+
+        var from = TimeOnly.FromDateTime(day.ActualArrival.Value.AddHours(ScheduleHours.NormalDailyHours));
+        var to   = TimeOnly.FromDateTime(day.ActualDeparture.Value);
+        return from < to ? (from, to) : null;
     }
 
     public async Task<(int Submitted, string? Error)> SubmitOvertimeDaysAsync(
@@ -273,6 +385,10 @@ public class ScheduleSubmitterService : IScheduleSubmitter
     private static List<WorkdayDetails> BuildWorkdayDetails(ScheduleDayDto day)
     {
         if (day.StartTime == null || day.EndTime == null) return new();
+
+        // Over 8 hours: the schedule carries the first 8h only, the rest goes in as overtime.
+        var endTime = ScheduleHours.GetOvertimeRange(day.StartTime, day.EndTime)?.From ?? day.EndTime.Value;
+
         return new()
         {
             new()
@@ -286,7 +402,7 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                     _                  => "ΕΡΓ"
                 },
                 StartTime = day.StartTime.Value,
-                EndTime   = day.EndTime.Value
+                EndTime   = endTime
             }
         };
     }

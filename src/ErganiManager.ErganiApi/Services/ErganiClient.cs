@@ -71,6 +71,12 @@ public class ErganiClient : IErganiClient
         => PostAsync<OvertimeRequestBody, List<ErganiSubmissionResponse>>(
             credentials, ErganiEndpoints.OvertimeSubmitPath, OvertimeRequestBody.From(submissions), ct);
 
+    public Task<ErganiCallResult<List<ErganiSubmissionResponse>>> SubmitLeaveAsync(
+        ErganiCredentials credentials, List<CompanyLeaveSubmission> submissions,
+        CancellationToken ct = default)
+        => PostAsync<LeaveRequestBody, List<ErganiSubmissionResponse>>(
+            credentials, ErganiEndpoints.LeaveSubmitPath, LeaveRequestBody.From(submissions), ct);
+
     // ── Authentication ────────────────────────────────────────────────────
 
     public async Task<ErganiAuthResponse?> AuthenticateAsync(

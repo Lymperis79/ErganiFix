@@ -49,6 +49,10 @@ public interface IErganiClient
         ErganiCredentials credentials, List<CompanyOvertimeSubmission> submissions,
         CancellationToken ct = default);
 
+    Task<ErganiCallResult<List<ErganiSubmissionResponse>>> SubmitLeaveAsync(
+        ErganiCredentials credentials, List<CompanyLeaveSubmission> submissions,
+        CancellationToken ct = default);
+
     // ── Authentication ────────────────────────────────────────────────────
     /// <summary>Obtain a JWT token. Returns null on failure.</summary>
     Task<ErganiAuthResponse?> AuthenticateAsync(

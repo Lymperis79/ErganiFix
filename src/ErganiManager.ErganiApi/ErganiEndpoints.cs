@@ -44,6 +44,10 @@ public static class ErganiEndpoints
     public const string OvertimeSubmitPath =
         "Documents/WTOOv";
 
+    /// <summary>Οργάνωση Χρόνου Εργασίας - Άδειες.</summary>
+    public const string LeaveSubmitPath =
+        "Documents/WTOLeave";
+
     // ============================================================
     // LOOKUP
     // ============================================================

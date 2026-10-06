@@ -152,4 +152,13 @@ public class AnalyticsItem
     [JsonPropertyName("f_type")] public string Type { get; set; } = string.Empty;
     [JsonPropertyName("f_from")] public string From { get; set; } = string.Empty;
     [JsonPropertyName("f_to")]   public string To { get; set; } = string.Empty;
+
+    // WTOLeave only — left null (and therefore omitted) for overtime and schedules.
+    [JsonPropertyName("f_year")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Year { get; set; }
+
+    [JsonPropertyName("f_req_days")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RequiredDays { get; set; }
 }
