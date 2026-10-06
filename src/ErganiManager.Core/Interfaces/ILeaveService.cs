@@ -36,6 +36,9 @@ public interface ILeaveService
     /// <summary>Leave records of one employee, newest first.</summary>
     Task<List<LeaveDto>> GetByEmployeeAsync(int companyId, int employeeId, int take = 300);
 
+    /// <summary>Gets the employee holidays in an inclusive date range.</summary>
+    Task<List<LeaveDto>> GetByEmployeeDateRangeAsync(int companyId, int employeeId, DateOnly from, DateOnly to);
+
     /// <summary>Creates one record per day from <paramref name="from"/> to <paramref name="to"/>
     /// (weekends optionally skipped). Days that already have the same leave are skipped.</summary>
     Task<LeaveCreateResult> CreateRangeAsync(LeaveDto template, DateOnly from, DateOnly to, bool skipWeekends);

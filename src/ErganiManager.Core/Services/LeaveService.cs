@@ -32,6 +32,22 @@ public class LeaveService : ILeaveService
         return rows.Select(ToDto).ToList();
     }
 
+    public async Task<List<LeaveDto>> GetByEmployeeDateRangeAsync(
+        int companyId, int employeeId, DateOnly from, DateOnly to)
+    {
+        await using var db = OpenDb();
+
+        var rows = await db.Leaves
+            .Where(l => l.EmployeeId == employeeId
+                     && l.LeaveDate >= from && l.LeaveDate <= to
+                     && l.Employee != null && l.Employee.CompanyId == companyId)
+            .OrderBy(l => l.LeaveDate)
+            .ThenBy(l => l.Id)
+            .ToListAsync();
+
+        return rows.Select(ToDto).ToList();
+    }
+
     public async Task<LeaveCreateResult> CreateRangeAsync(
         LeaveDto template, DateOnly from, DateOnly to, bool skipWeekends)
     {
