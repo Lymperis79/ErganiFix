@@ -31,7 +31,7 @@
                 <!-- SQL Server -->
                 <StackPanel IsVisible="{Binding IsSqlServer}" Spacing="10" Margin="0,8,0,0">
                     <TextBlock Text="{Binding Loc[DbServer]}" FontWeight="SemiBold" />
-                    <TextBox Text="{Binding SqlServerHost}" Watermark="localhost\SQLEXPRESS" />
+                    <TextBox Text="{Binding SqlServerHost}" PlaceholderText="localhost\SQLEXPRESS" />
                     <TextBlock Text="{Binding Loc[DbName]}" FontWeight="SemiBold" />
                     <TextBox Text="{Binding SqlServerDatabase}" />
                     <CheckBox Content="{Binding Loc[DbWindowsAuth]}"
@@ -47,7 +47,7 @@
                 <!-- MariaDB -->
                 <StackPanel IsVisible="{Binding IsMariaDb}" Spacing="10" Margin="0,8,0,0">
                     <TextBlock Text="{Binding Loc[DbServer]}" FontWeight="SemiBold" />
-                    <TextBox Text="{Binding MariaDbHost}" Watermark="localhost" />
+                    <TextBox Text="{Binding MariaDbHost}" PlaceholderText="localhost" />
                     <TextBlock Text="{Binding Loc[DbName]}" FontWeight="SemiBold" />
                     <TextBox Text="{Binding MariaDbDatabase}" />
                     <TextBlock Text="{Binding Loc[Username]}" FontWeight="SemiBold" />

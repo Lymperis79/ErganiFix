@@ -6,7 +6,7 @@
         Title="Ergani Manager — Terminal"
         WindowState="Maximized"
         CanResize="False"
-        SystemDecorations="None">
+        WindowDecorations="None">
 
     <Grid Background="#0F1115">
 

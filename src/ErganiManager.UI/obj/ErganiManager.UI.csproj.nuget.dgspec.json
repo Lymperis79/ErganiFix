@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.UI\\ErganiManager.UI.csproj": {}
+    "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.UI\\ErganiManager.UI.csproj": {}
   },
   "projects": {
-    "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\ErganiManager.Core.csproj": {
+    "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\ErganiManager.Core.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\ErganiManager.Core.csproj",
+        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\ErganiManager.Core.csproj",
         "projectName": "ErganiManager.Core",
-        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\ErganiManager.Core.csproj",
+        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\ErganiManager.Core.csproj",
         "packagesPath": "C:\\Users\\ThinkPad\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\obj\\",
+        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\obj\\",
         "projectStyle": "PackageReference",
         "centralPackageVersionsManagementEnabled": true,
         "fallbackFolders": [
@@ -35,11 +35,11 @@
             "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj"
               },
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj"
               }
             }
           }
@@ -395,14 +395,14 @@
         }
       }
     },
-    "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
+    "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
+        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
         "projectName": "ErganiManager.Data",
-        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
+        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj",
         "packagesPath": "C:\\Users\\ThinkPad\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\obj\\",
+        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\obj\\",
         "projectStyle": "PackageReference",
         "centralPackageVersionsManagementEnabled": true,
         "fallbackFolders": [
@@ -791,14 +791,14 @@
         }
       }
     },
-    "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj": {
+    "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj",
+        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj",
         "projectName": "ErganiManager.ErganiApi",
-        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj",
+        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj",
         "packagesPath": "C:\\Users\\ThinkPad\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.ErganiApi\\obj\\",
+        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.ErganiApi\\obj\\",
         "projectStyle": "PackageReference",
         "centralPackageVersionsManagementEnabled": true,
         "fallbackFolders": [
@@ -822,11 +822,11 @@
             "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\ErganiManager.Core.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\ErganiManager.Core.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\ErganiManager.Core.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\ErganiManager.Core.csproj"
               },
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj"
               }
             }
           }
@@ -1182,14 +1182,14 @@
         }
       }
     },
-    "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj": {
+    "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj",
+        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj",
         "projectName": "ErganiManager.LocalCache",
-        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj",
+        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj",
         "packagesPath": "C:\\Users\\ThinkPad\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\obj\\",
+        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\obj\\",
         "projectStyle": "PackageReference",
         "centralPackageVersionsManagementEnabled": true,
         "fallbackFolders": [
@@ -1563,14 +1563,14 @@
         }
       }
     },
-    "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.UI\\ErganiManager.UI.csproj": {
+    "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.UI\\ErganiManager.UI.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.UI\\ErganiManager.UI.csproj",
+        "projectUniqueName": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.UI\\ErganiManager.UI.csproj",
         "projectName": "ErganiManager.UI",
-        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.UI\\ErganiManager.UI.csproj",
+        "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.UI\\ErganiManager.UI.csproj",
         "packagesPath": "C:\\Users\\ThinkPad\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.UI\\obj\\",
+        "outputPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.UI\\obj\\",
         "projectStyle": "PackageReference",
         "centralPackageVersionsManagementEnabled": true,
         "fallbackFolders": [
@@ -1594,17 +1594,17 @@
             "framework": "net10.0",
             "targetAlias": "net10.0",
             "projectReferences": {
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\ErganiManager.Core.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Core\\ErganiManager.Core.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\ErganiManager.Core.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Core\\ErganiManager.Core.csproj"
               },
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.Data\\ErganiManager.Data.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.Data\\ErganiManager.Data.csproj"
               },
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.ErganiApi\\ErganiManager.ErganiApi.csproj"
               },
-              "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj": {
-                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiFix-main\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj"
+              "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj": {
+                "projectPath": "C:\\Users\\ThinkPad\\Desktop\\ErganiII\\src\\ErganiManager.LocalCache\\ErganiManager.LocalCache.csproj"
               }
             }
           }

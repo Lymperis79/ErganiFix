@@ -47,12 +47,12 @@
                         <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
                             <TextBlock Text="From" FontWeight="SemiBold" />
                             <TextBox Text="{Binding FromDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}"
-                                     Watermark="dd/mm/yyyy" />
+                                     PlaceholderText="dd/mm/yyyy" />
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
                             <TextBlock Text="To (inclusive)" FontWeight="SemiBold" />
                             <TextBox Text="{Binding ToDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}"
-                                     Watermark="dd/mm/yyyy" />
+                                     PlaceholderText="dd/mm/yyyy" />
                         </StackPanel>
                         <CheckBox Grid.Row="1" Grid.Column="2" Content="Skip Saturday / Sunday"
                                   IsChecked="{Binding SkipWeekends}" VerticalAlignment="Bottom" />
@@ -68,11 +68,11 @@
 
                         <StackPanel Grid.Row="3" Grid.Column="0" Spacing="4">
                             <TextBlock Text="Reference year (optional)" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding ReferenceYear}" Watermark="e.g. 2026" MaxLength="4" />
+                            <TextBox Text="{Binding ReferenceYear}" PlaceholderText="e.g. 2026" MaxLength="4" />
                         </StackPanel>
                         <StackPanel Grid.Row="3" Grid.Column="1" Spacing="4">
                             <TextBlock Text="Entitled leave days (optional)" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding EntitledDays}" Watermark="e.g. 20" MaxLength="3" />
+                            <TextBox Text="{Binding EntitledDays}" PlaceholderText="e.g. 20" MaxLength="3" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Spacing="4">
