@@ -26,6 +26,13 @@ public partial class CalendarCellViewModel : ViewModelBase
     [ObservableProperty] private bool _isToday;
     [ObservableProperty] private bool _isSelected;
     [ObservableProperty] private bool _isSubmitted;
+    [ObservableProperty] private string _officialHolidayText = string.Empty;
+    [ObservableProperty] private string _userHolidayText = string.Empty;
+    [ObservableProperty] private string _holidayTooltip = string.Empty;
+
+    public bool HasOfficialHoliday => !string.IsNullOrWhiteSpace(OfficialHolidayText);
+    public bool HasUserHoliday => !string.IsNullOrWhiteSpace(UserHolidayText);
+    public bool HasHoliday => HasOfficialHoliday || HasUserHoliday;
 
     public string DayNumberText => Date?.Day.ToString() ?? string.Empty;
     public string WorkTypeIcon => WorkType switch
@@ -202,6 +209,7 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         ILeaveService leaveService, ILeaveSubmitter leaveSubmitter)
     {
         Holidays = new HolidayDialogViewModel(leaveService, leaveSubmitter, documentService);
+        Holidays.HolidaysChanged += (_, _) => _ = RefreshCalendarAsync();
         _scheduleService   = scheduleService;
         _employeeService   = employeeService;
         _branchService     = branchService;
@@ -303,12 +311,19 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
 
     private async Task BuildMonthCalendarAsync()
     {
+        var first = new DateOnly(Year, Month, 1);
+        var days  = DateTime.DaysInMonth(Year, Month);
+        var last  = new DateOnly(Year, Month, days);
+
         var schedules = await _scheduleService
             .GetMonthAsync(SelectedEmployee!.Id, Year, Month).ConfigureAwait(false);
+        var leaves = _session?.CompanyId is int companyId
+            ? await Holidays.GetCalendarLeavesAsync(companyId, SelectedEmployee.Id, first, last).ConfigureAwait(false)
+            : new List<LeaveDto>();
         var byDate = schedules.ToDictionary(s => s.ScheduleDate);
+        var leavesByDate = leaves.GroupBy(l => l.LeaveDate).ToDictionary(g => g.Key, g => g.ToList());
+        var official = GreekHolidays.ForYear(Year).ToDictionary(h => h.Date, h => h.Name);
         var today  = DateOnly.FromDateTime(DateTime.Today);
-        var first  = new DateOnly(Year, Month, 1);
-        var days   = DateTime.DaysInMonth(Year, Month);
         int startDow = ((int)first.DayOfWeek + 6) % 7; // Mon=0
 
         var cells = new List<CalendarCellViewModel>();
@@ -319,16 +334,27 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         {
             var date = new DateOnly(Year, Month, d);
             byDate.TryGetValue(date, out var sched);
+            leavesByDate.TryGetValue(date, out var dayLeaves);
+            official.TryGetValue(date, out var officialName);
+            var userHolidayText = dayLeaves is null ? string.Empty : string.Join(" · ", dayLeaves.Select(l => LeaveTypes.Find(l.LeaveTypeCode)?.Description ?? l.LeaveTypeCode));
+            var tooltip = string.Join("\n", new[]
+            {
+                string.IsNullOrWhiteSpace(officialName) ? null : $"🇬🇷 {officialName}",
+                string.IsNullOrWhiteSpace(userHolidayText) ? null : $"🏖 {userHolidayText}"
+            }.Where(x => !string.IsNullOrWhiteSpace(x)));
             cells.Add(new CalendarCellViewModel
             {
-                IsInMonth     = true,
-                Date          = date,
-                HasSchedule   = sched != null,
-                IsSubmitted   = sched?.SubmittedToErgani ?? false,
-                WorkType      = sched != null ? (AppWorkType?)sched.WorkType : null,
-                TimeRangeText = sched is { StartTime: not null, EndTime: not null }
+                IsInMonth          = true,
+                Date               = date,
+                HasSchedule        = sched != null,
+                IsSubmitted        = sched?.SubmittedToErgani ?? false,
+                WorkType           = sched != null ? (AppWorkType?)sched.WorkType : null,
+                TimeRangeText      = sched is { StartTime: not null, EndTime: not null }
                     ? $"{sched.StartTime:HH:mm}–{sched.EndTime:HH:mm}" : "",
-                IsToday       = date == today
+                OfficialHolidayText = officialName ?? string.Empty,
+                UserHolidayText     = userHolidayText,
+                HolidayTooltip      = tooltip,
+                IsToday             = date == today
             });
         }
 
@@ -354,22 +380,41 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         }
 
         var byDate = schedules.ToDictionary(s => s.ScheduleDate);
+        var leaves = _session?.CompanyId is int companyId
+            ? await Holidays.GetCalendarLeavesAsync(companyId, SelectedEmployee.Id, from, to).ConfigureAwait(false)
+            : new List<LeaveDto>();
+        var leavesByDate = leaves.GroupBy(l => l.LeaveDate).ToDictionary(g => g.Key, g => g.ToList());
+        var officialByDate = Enumerable.Range(from.Year, to.Year - from.Year + 1)
+            .SelectMany(y => GreekHolidays.ForYear(y))
+            .Where(h => h.Date >= from && h.Date <= to)
+            .ToDictionary(h => h.Date, h => h.Name);
         var today  = DateOnly.FromDateTime(DateTime.Today);
         var cells  = new List<CalendarCellViewModel>();
 
         for (var d = from; d <= to; d = d.AddDays(1))
         {
             byDate.TryGetValue(d, out var sched);
+            leavesByDate.TryGetValue(d, out var dayLeaves);
+            officialByDate.TryGetValue(d, out var officialName);
+            var userHolidayText = dayLeaves is null ? string.Empty : string.Join(" · ", dayLeaves.Select(l => LeaveTypes.Find(l.LeaveTypeCode)?.Description ?? l.LeaveTypeCode));
+            var tooltip = string.Join("\n", new[]
+            {
+                string.IsNullOrWhiteSpace(officialName) ? null : $"🇬🇷 {officialName}",
+                string.IsNullOrWhiteSpace(userHolidayText) ? null : $"🏖 {userHolidayText}"
+            }.Where(x => !string.IsNullOrWhiteSpace(x)));
             cells.Add(new CalendarCellViewModel
             {
-                IsInMonth     = true,
-                Date          = d,
-                HasSchedule   = sched != null,
-                IsSubmitted   = sched?.SubmittedToErgani ?? false,
-                WorkType      = sched != null ? (AppWorkType?)sched.WorkType : null,
-                TimeRangeText = sched is { StartTime: not null, EndTime: not null }
+                IsInMonth           = true,
+                Date                = d,
+                HasSchedule         = sched != null,
+                IsSubmitted         = sched?.SubmittedToErgani ?? false,
+                WorkType            = sched != null ? (AppWorkType?)sched.WorkType : null,
+                TimeRangeText       = sched is { StartTime: not null, EndTime: not null }
                     ? $"{sched.StartTime:HH:mm}–{sched.EndTime:HH:mm}" : "",
-                IsToday       = d == today
+                OfficialHolidayText = officialName ?? string.Empty,
+                UserHolidayText     = userHolidayText,
+                HolidayTooltip      = tooltip,
+                IsToday              = d == today
             });
         }
 

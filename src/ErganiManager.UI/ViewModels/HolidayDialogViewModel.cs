@@ -42,6 +42,9 @@ public class HolidayRow
 /// what was sent (response + PDF) — the same flow as overtime, opened from the Schedules page.</summary>
 public partial class HolidayDialogViewModel : ObservableObject
 {
+    /// <summary>Raised after holiday records have been changed so the schedule calendar can refresh.</summary>
+    public event EventHandler? HolidaysChanged;
+
     private readonly ILeaveService _leaveService;
     private readonly ILeaveSubmitter _leaveSubmitter;
     private readonly IErganiDocumentService _documentService;
@@ -127,6 +130,9 @@ public partial class HolidayDialogViewModel : ObservableObject
         IsOpen = true;
     }
 
+    public Task<List<LeaveDto>> GetCalendarLeavesAsync(int companyId, int employeeId, DateOnly from, DateOnly to) =>
+        _leaveService.GetByEmployeeDateRangeAsync(companyId, employeeId, from, to);
+
     [RelayCommand]
     private void Close() => IsOpen = false;
 
@@ -210,6 +216,7 @@ public partial class HolidayDialogViewModel : ObservableObject
 
             var created = await _leaveService.CreateRangeAsync(template, from, to, SkipWeekends);
             await ReloadAsync();
+            HolidaysChanged?.Invoke(this, EventArgs.Empty);
 
             var dupNote = created.Duplicates > 0 ? $" ({created.Duplicates} day(s) already existed)" : string.Empty;
 

@@ -127,7 +127,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:CalendarCellViewModel">
-                            <Panel Width="120" Height="90" Margin="2">
+                            <Panel Width="120" Height="110" Margin="2">
 
                                 <!-- Empty filler -->
                                 <Border IsVisible="{Binding !IsInMonth}" />
@@ -151,7 +151,7 @@
                                         <SolidColorBrush Color="#3A3F4B" />
                                     </Border.BorderBrush>
 
-                                    <StackPanel>
+                                    <StackPanel ToolTip.Tip="{Binding HolidayTooltip}">
                                         <Grid ColumnDefinitions="*,Auto">
                                             <TextBlock Grid.Column="0" Text="{Binding DayNumberText}"
                                                        FontSize="13" FontWeight="SemiBold"
@@ -162,6 +162,18 @@
                                         </Grid>
                                         <TextBlock Text="{Binding TimeRangeText}" FontSize="10"
                                                    Foreground="#AAAAAA" TextWrapping="Wrap" />
+                                        <Border IsVisible="{Binding HasOfficialHoliday}"
+                                                Background="#3A2F1B" CornerRadius="3"
+                                                Padding="4,1" Margin="0,2,0,0">
+                                            <TextBlock Text="{Binding OfficialHolidayText}" FontSize="9"
+                                                       Foreground="#FFD180" TextTrimming="CharacterEllipsis" />
+                                        </Border>
+                                        <Border IsVisible="{Binding HasUserHoliday}"
+                                                Background="#1E3545" CornerRadius="3"
+                                                Padding="4,1" Margin="0,2,0,0">
+                                            <TextBlock Text="{Binding UserHolidayText}" FontSize="9"
+                                                       Foreground="#90CAF9" TextTrimming="CharacterEllipsis" />
+                                        </Border>
                                         <TextBlock Text="📤 sent" FontSize="9" Foreground="#81C784"
                                                    IsVisible="{Binding IsSubmitted}" />
                                         <!-- Selected indicator -->
