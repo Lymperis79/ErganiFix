@@ -14,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<EmployeeSchedule> Schedules => Set<EmployeeSchedule>();
     public DbSet<WorkCard> WorkCards => Set<WorkCard>();
     public DbSet<Overtime> Overtimes => Set<Overtime>();
+    public DbSet<Leave> Leaves => Set<Leave>();
     public DbSet<ApiSubmissionLog> ApiSubmissionLogs => Set<ApiSubmissionLog>();
     public DbSet<AppLog> AppLogs => Set<AppLog>();
     public DbSet<ReportDefinition> ReportDefinitions => Set<ReportDefinition>();
@@ -132,6 +133,22 @@ public class AppDbContext : DbContext
                 .OnDelete(DeleteBehavior.NoAction);
 
             e.Property(o => o.Justification).HasConversion<string>();
+        });
+
+        // ── Leave (holidays) ──────────────────────────────────
+        modelBuilder.Entity<Leave>(e =>
+        {
+            e.HasOne(l => l.Employee)
+                .WithMany()
+                .HasForeignKey(l => l.EmployeeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(l => l.Branch)
+                .WithMany()
+                .HasForeignKey(l => l.BranchId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            e.HasIndex(l => new { l.EmployeeId, l.LeaveDate });
         });
 
         // ── Logging ───────────────────────────────────────────

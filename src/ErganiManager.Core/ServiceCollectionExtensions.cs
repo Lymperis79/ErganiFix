@@ -27,6 +27,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<IScheduleService, ScheduleService>();
         services.AddTransient<IWorkCardHistoryService, WorkCardHistoryService>();
         services.AddTransient<IOvertimeService, OvertimeService>();
+        services.AddTransient<ILeaveService, LeaveService>();
 
         return services;
     }
