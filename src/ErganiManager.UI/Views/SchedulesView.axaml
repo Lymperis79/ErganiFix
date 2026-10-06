@@ -1,13 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:ErganiManager.UI.ViewModels"
+             xmlns:views="using:ErganiManager.UI.Views"
              x:Class="ErganiManager.UI.Views.SchedulesView"
              x:DataType="vm:SchedulesViewModel">
 
     <Grid RowDefinitions="Auto,Auto,Auto,*">
 
         <!-- Row 0: Header -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,8">
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,8">
             <TextBlock Grid.Column="0" Text="{Binding Loc[Schedules]}" FontSize="22" FontWeight="Bold" />
             <Button Grid.Column="1" Content="⬆ Import"
                     Command="{Binding RequestImportCommand}"
@@ -24,10 +25,13 @@
             <Button Grid.Column="5" Content="{Binding SubmitScheduleButtonText}"
                     Command="{Binding SubmitScheduleToErganiCommand}"
                     Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="6" Content="⏱ Submit Overtime"
+            <Button Grid.Column="6" Content="{Binding SubmitOvertimeButtonText}"
                     Command="{Binding SubmitOvertimesCommand}"
                     Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="7" Content="📜 Log"
+            <Button Grid.Column="7" Content="🏖 Holidays"
+                    Command="{Binding OpenHolidaysCommand}"
+                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
+            <Button Grid.Column="8" Content="📜 Log"
                     Command="{Binding OpenLogCommand}"
                     IsEnabled="{Binding HasActiveCompany}" />
         </Grid>
@@ -218,6 +222,11 @@
                                 </Grid>
                             </StackPanel>
 
+                            <TextBlock Text="{Binding EditingOvertimeNote}" Foreground="#FFB74D"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       IsVisible="{Binding EditingOvertimeNote,
+                                           Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
                             <TextBlock Text="{Binding Loc[Comments]}" FontWeight="SemiBold" />
                             <TextBox Text="{Binding EditingComments}" />
 
@@ -363,6 +372,11 @@
                 </Grid>
             </Border>
         </Border>
+
+        <!-- ── Holidays form ── -->
+        <Panel Grid.Row="0" Grid.RowSpan="4" ZIndex="45" IsVisible="{Binding Holidays.IsOpen}">
+            <views:HolidayDialogView DataContext="{Binding Holidays}" />
+        </Panel>
 
         <!-- ── Submission log dialog (Ergani responses + PDF) ── -->
         <Border Grid.Row="0" Grid.RowSpan="4"

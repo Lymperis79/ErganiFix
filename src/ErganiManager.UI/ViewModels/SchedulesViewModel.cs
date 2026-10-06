@@ -118,6 +118,9 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     public string SubmitScheduleButtonText => HasSelection
         ? $"📤 Submit selected ({_selectedDates.Count})"
         : "📤 Submit Schedule";
+    public string SubmitOvertimeButtonText => HasSelection
+        ? $"⏱ Overtime of selected ({_selectedDates.Count})"
+        : "⏱ Submit Overtime";
     public string DeleteSelectedButtonText => $"🗑 Delete selected ({_selectedDates.Count})";
 
     // ── Bulk / day dialog ─────────────────────────────────────────────────────
@@ -139,6 +142,9 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     private readonly List<DateOnly> _pendingDeleteDates = new();
 
     // ── Submission log (Ergani responses + PDF) ───────────────────────────────
+    /// <summary>The holidays form (opened with the 🏖 Holidays button).</summary>
+    public HolidayDialogViewModel Holidays { get; }
+
     public ObservableCollection<ScheduleLogRow> LogRows { get; } = new();
     [ObservableProperty] private bool _isLogOpen;
     [ObservableProperty] private bool _hasLogRows;
@@ -176,10 +182,26 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     /// <summary>Only Office/Home days that are not yet at Ergani can be submitted from the day dialog.</summary>
     public bool CanSubmitEditingDay => ShowTimeFields && !EditingSubmitted;
 
+    /// <summary>Shown when the day is longer than 8 hours: how it will be split for Ergani.</summary>
+    public string EditingOvertimeNote
+    {
+        get
+        {
+            if (!ShowTimeFields || !EditingStartTime.HasValue || !EditingEndTime.HasValue) return string.Empty;
+            var start = TimeOnly.FromTimeSpan(EditingStartTime.Value);
+            var end   = TimeOnly.FromTimeSpan(EditingEndTime.Value);
+            if (ScheduleHours.GetOvertimeRange(start, end) is not { } ot) return string.Empty;
+            return $"⏱ Over {ScheduleHours.NormalDailyHours} hours — {start:HH:mm}–{ot.From:HH:mm} is submitted as the schedule, " +
+                   $"{ot.From:HH:mm}–{ot.To:HH:mm} is submitted as overtime.";
+        }
+    }
+
     public SchedulesViewModel(IScheduleService scheduleService,
         IEmployeeService employeeService, IBranchService branchService,
-        IScheduleSubmitter scheduleSubmitter, IErganiDocumentService documentService)
+        IScheduleSubmitter scheduleSubmitter, IErganiDocumentService documentService,
+        ILeaveService leaveService, ILeaveSubmitter leaveSubmitter)
     {
+        Holidays = new HolidayDialogViewModel(leaveService, leaveSubmitter, documentService);
         _scheduleService   = scheduleService;
         _employeeService   = employeeService;
         _branchService     = branchService;
@@ -394,6 +416,7 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionLabel));
         OnPropertyChanged(nameof(SubmitScheduleButtonText));
+        OnPropertyChanged(nameof(SubmitOvertimeButtonText));
         OnPropertyChanged(nameof(DeleteSelectedButtonText));
     }
 
@@ -452,7 +475,14 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     {
         OnPropertyChanged(nameof(ShowTimeFields));
         OnPropertyChanged(nameof(CanSubmitEditingDay));
+        OnPropertyChanged(nameof(EditingOvertimeNote));
     }
+
+    partial void OnEditingStartTimeChanged(TimeSpan? value) =>
+        OnPropertyChanged(nameof(EditingOvertimeNote));
+
+    partial void OnEditingEndTimeChanged(TimeSpan? value) =>
+        OnPropertyChanged(nameof(EditingOvertimeNote));
 
     partial void OnEditingScheduleIdChanged(int value) =>
         OnPropertyChanged(nameof(IsEditingExisting));
@@ -773,23 +803,24 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         try
         {
             var picked = _selectedDates.ToHashSet();
-            var candidates = new List<ScheduleDayDto>();
-
-            if (picked.Count > 0)
-            {
-                // A selected week can span two months — load each month once.
-                foreach (var ym in picked.Select(d => (d.Year, d.Month)).Distinct())
-                    candidates.AddRange(await _scheduleService.GetMonthAsync(SelectedEmployee.Id, ym.Year, ym.Month));
-                candidates = candidates.Where(c => picked.Contains(c.ScheduleDate)).ToList();
-            }
-            else
-            {
-                candidates = await _scheduleService.GetMonthAsync(SelectedEmployee.Id, Year, Month);
-            }
+            var candidates = await LoadScopeDaysAsync(SelectedEmployee.Id, picked);
 
             await SubmitDaysAsync(companyId, candidates, picked.Count > 0 ? picked.Count : null);
         }
         catch (Exception ex) { StatusMessage = $"❌ {ex.Message}"; }
+    }
+
+    /// <summary>The selected days, or the whole displayed month when nothing is selected.</summary>
+    private async Task<List<ScheduleDayDto>> LoadScopeDaysAsync(int employeeId, HashSet<DateOnly> picked)
+    {
+        if (picked.Count == 0)
+            return await _scheduleService.GetMonthAsync(employeeId, Year, Month);
+
+        // A selected week can span two months — load each month once.
+        var all = new List<ScheduleDayDto>();
+        foreach (var ym in picked.Select(d => (d.Year, d.Month)).Distinct())
+            all.AddRange(await _scheduleService.GetMonthAsync(employeeId, ym.Year, ym.Month));
+        return all.Where(c => picked.Contains(c.ScheduleDate)).ToList();
     }
 
     private async Task SubmitDaysAsync(int companyId, List<ScheduleDayDto> candidates, int? pickedCount)
@@ -814,21 +845,57 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
 
         var result = await _scheduleSubmitter.SubmitScheduleDaysAsync(companyId, toSubmit);
 
+        // Days over 8 hours also produce an overtime record for the extra hours.
+        var overtime = string.Empty;
+        if (result.OvertimeSubmitted > 0 || result.OvertimeFailed > 0)
+        {
+            overtime = $" Overtime (hours over 8): {result.OvertimeSubmitted} sent";
+            if (result.OvertimeFailed > 0)
+            {
+                var bad = result.Days.First(d => d.OvertimeFrom.HasValue && !d.OvertimeSubmitted);
+                overtime += $", {result.OvertimeFailed} NOT sent — {bad.Date:dd/MM}: {bad.OvertimeError} " +
+                            "(saved on the Overtime page)";
+            }
+            overtime += ".";
+        }
+
         if (result.Error != null)
             StatusMessage = $"❌ {result.Error}";
         else if (result.Failed == 0)
-            StatusMessage = $"✅ Submitted {result.Submitted} day(s) to Ergani.{skipped}";
+            StatusMessage = $"{(result.OvertimeFailed == 0 ? "✅" : "⚠")} Submitted {result.Submitted} day(s) to Ergani.{overtime}{skipped}";
         else
         {
             var first = result.Days.First(d => !d.Success);
             StatusMessage = $"❌ {result.Submitted} submitted, {result.Failed} failed — " +
-                            $"{first.Date:dd/MM}: {first.Error}. Open 📜 Log for the details.{skipped}";
+                            $"{first.Date:dd/MM}: {first.Error}. Open 📜 Log for the details.{overtime}{skipped}";
         }
 
         await RefreshCalendarAsync();
     }
 
     // ── Submission log: Ergani responses + PDF ────────────────────────────────
+
+    /// <summary>Opens the holidays form. If the selected calendar days form one continuous block,
+    /// the form starts with those dates.</summary>
+    [RelayCommand]
+    private async Task OpenHolidaysAsync()
+    {
+        if (SelectedEmployee == null || _session?.CompanyId is not int companyId)
+        { StatusMessage = "Select an employee first."; return; }
+        try
+        {
+            DateOnly? from = null, to = null;
+            if (_selectedDates.Count > 0)
+            {
+                var min = _selectedDates.Min();
+                var max = _selectedDates.Max();
+                if (max.DayNumber - min.DayNumber + 1 == _selectedDates.Count) { from = min; to = max; }
+            }
+
+            await Holidays.OpenAsync(companyId, SelectedEmployee, AvailableBranches.ToList(), from, to);
+        }
+        catch (Exception ex) { StatusMessage = $"❌ {ex.Message}"; }
+    }
 
     [RelayCommand]
     private async Task OpenLogAsync()
@@ -910,21 +977,30 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         { StatusMessage = "Select an employee first."; return; }
         try
         {
-            StatusMessage = "Detecting overtime and submitting…";
-            var schedules = await _scheduleService
-                .GetMonthAsync(SelectedEmployee.Id, Year, Month).ConfigureAwait(false);
-            var overtimeDays = schedules
-                .Where(s => s.ActualArrival.HasValue && s.ActualDeparture.HasValue
-                    && (s.ActualDeparture.Value - s.ActualArrival.Value).TotalHours > 8)
-                .ToList();
-            if (overtimeDays.Count == 0)
-            { StatusMessage = "No overtime days detected this month (work > 8h)."; return; }
+            var picked = _selectedDates.ToHashSet();
+            var days   = await LoadScopeDaysAsync(SelectedEmployee.Id, picked);
 
-            var (count, error) = await _scheduleSubmitter
-                .SubmitOvertimeDaysAsync(companyId, overtimeDays).ConfigureAwait(false);
-            StatusMessage = error != null
-                ? $"❌ {error} ({count} submitted before error)"
-                : $"✅ Submitted {count} overtime record(s) to Ergani.";
+            StatusMessage = "Detecting overtime and submitting…";
+            var result = await _scheduleSubmitter.SubmitOvertimeFromScheduleAsync(companyId, days);
+
+            if (result.Days.Count == 0)
+            {
+                StatusMessage = picked.Count > 0
+                    ? "No overtime (over 8 hours) on the selected day(s)."
+                    : "No overtime days found this month (over 8 hours).";
+                return;
+            }
+
+            if (result.OvertimeFailed == 0)
+                StatusMessage = $"✅ Submitted {result.OvertimeSubmitted} overtime record(s) to Ergani.";
+            else
+            {
+                var bad = result.Days.First(d => !d.OvertimeSubmitted);
+                StatusMessage = $"❌ {result.OvertimeSubmitted} overtime sent, {result.OvertimeFailed} NOT sent — " +
+                                $"{bad.Date:dd/MM}: {bad.OvertimeError} (the unsent ones are saved on the Overtime page).";
+            }
+
+            await RefreshCalendarAsync();
         }
         catch (Exception ex) { StatusMessage = $"❌ {ex.Message}"; }
     }
