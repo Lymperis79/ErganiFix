@@ -110,8 +110,15 @@ public class ConnectionStateService : IConnectionStateService
             // the schema is broken.
             _ = await db.Companies.AnyAsync();
 
-            // Add any columns introduced after the first release (EnsureCreated won't).
-            await DbSchemaUpdater.EnsureUpToDateAsync(config);
+            // Apply EF migrations if the project has them; otherwise patch missing columns
+            // (EnsureCreated never alters existing tables).
+            var outcome = await DatabaseMigrator.ApplyAsync(config);
+            if (!outcome.UsedMigrations)
+                await DbSchemaUpdater.EnsureUpToDateAsync(config);
+            else if (outcome.SchemaChanged)
+                // Big schema change: the temporary local cache was built from the old layout.
+                // It is backed up, deleted and recreated (refilled by Sync Cache).
+                LocalCacheDbContextFactory.DeleteLocalCache(backup: true);
             return true;
         }
         catch (Exception)

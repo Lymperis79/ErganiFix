@@ -23,4 +23,10 @@ public sealed class OvertimeBatchSubmissionResult
     public string? SubmissionId { get; init; }
     public string? ResponseRawJson { get; init; }
     public string? ErrorMessage { get; init; }
+
+    /// <summary>Ids of the overtime records Ergani accepted.</summary>
+    public IReadOnlyList<int> SubmittedIds { get; init; } = Array.Empty<int>();
+
+    /// <summary>Records that were not sent or were rejected: overtime id -> reason.</summary>
+    public IReadOnlyDictionary<int, string> Errors { get; init; } = new Dictionary<int, string>();
 }
