@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<ILeaveSubmitter, LeaveSubmitterService>();
         services.AddTransient<IEmailAlertService, EmailAlertService>();
         services.AddTransient<IErganiDataImportService, ErganiDataImportService>();
+        services.AddSingleton<IErganiPortalService, ErganiPortalService>();
 
         return services;
     }

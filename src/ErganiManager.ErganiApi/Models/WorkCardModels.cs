@@ -35,9 +35,9 @@ public static class AitiologiaCodes
     public static readonly List<AitiologiaOption> AllOptions = new()
     {
         new(None, "— On time (no reason needed)"),
-        new(NetworkOutage, "001 — Internet/Network outage"),
-        new(EmployerSystemUnavailable, "002 — Employer system unavailable"),
-        new(ErganiServiceUnavailable, "003 — Ergani API unavailable"),
+        new(NetworkOutage, "001 — Power outage / telecommunications problem"),
+        new(EmployerSystemUnavailable, "002 — Employer systems problem"),
+        new(ErganiServiceUnavailable, "003 — Problem connecting to ERGANI"),
         new(Other, "004 — Other reason"),
     };
 

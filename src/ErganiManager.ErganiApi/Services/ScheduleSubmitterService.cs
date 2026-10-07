@@ -52,6 +52,7 @@ public class ScheduleSubmitterService : IScheduleSubmitter
 
         var credentials = BuildCredentials(company);
         var stopped     = false;   // Ergani unreachable — no point trying the remaining dates
+        var overtimeQueue = new List<(int Id, ScheduleSubmitDayResult Day)>();
 
         foreach (var branchGroup in days.GroupBy(d => d.BranchId))
         {
@@ -160,8 +161,8 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                     if (success && ScheduleHours.GetOvertimeRange(day.StartTime, day.EndTime) is { } range
                         && day.WorkType is AppWorkType.Office or AppWorkType.Home)
                     {
-                        await SubmitOvertimePartAsync(db, companyId, day, range, dayResult);
-                        if (dayResult.OvertimeSubmitted) outcome.OvertimeSubmitted++; else outcome.OvertimeFailed++;
+                        if (await PrepareOvertimeAsync(db, day, range, dayResult, outcome) is int otId)
+                            overtimeQueue.Add((otId, dayResult));
                     }
                 }
 
@@ -174,6 +175,9 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                 }
             }
         }
+
+        // Hours over 8 of all the days above: ONE overtime request per branch.
+        await SubmitOvertimeBatchAsync(companyId, overtimeQueue, outcome);
 
         return outcome;
     }
@@ -194,12 +198,12 @@ public class ScheduleSubmitterService : IScheduleSubmitter
         return result;
     }
 
-    /// <summary>Creates (or reuses) the Overtime record for the hours over 8 and submits it through the
-    /// normal overtime path, so it is logged and — if Ergani refuses it — can be retried from the
-    /// Overtime page.</summary>
-    private async Task SubmitOvertimePartAsync(
-        AppDbContext db, int companyId, ScheduleDayDto day,
-        (TimeOnly From, TimeOnly To) range, ScheduleSubmitDayResult dayResult)
+    /// <summary>Creates (or reuses) the Overtime record for the hours over 8. Returns its id when it
+    /// still has to be sent to Ergani, or null when it was already sent / could not be prepared
+    /// (the day result and counters are updated in that case).</summary>
+    private async Task<int?> PrepareOvertimeAsync(
+        AppDbContext db, ScheduleDayDto day,
+        (TimeOnly From, TimeOnly To) range, ScheduleSubmitDayResult dayResult, ScheduleSubmitResult outcome)
     {
         dayResult.OvertimeFrom = range.From;
         dayResult.OvertimeTo   = range.To;
@@ -214,13 +218,19 @@ public class ScheduleSubmitterService : IScheduleSubmitter
             {
                 dayResult.OvertimeSubmitted = true;
                 dayResult.OvertimeProtocol  = existing.Protocol;
-                return;
+                outcome.OvertimeSubmitted++;
+                return null;
             }
 
             if (existing == null)
             {
                 var employee = await db.Employees.FindAsync(day.EmployeeId);
-                if (employee == null) { dayResult.OvertimeError = "Employee not found."; return; }
+                if (employee == null)
+                {
+                    dayResult.OvertimeError = "Employee not found.";
+                    outcome.OvertimeFailed++;
+                    return null;
+                }
 
                 existing = new Overtime
                 {
@@ -237,15 +247,50 @@ public class ScheduleSubmitterService : IScheduleSubmitter
                 await db.SaveChangesAsync();
             }
 
-            var ot = await _overtimeSubmitter.SubmitAsync(companyId, new[] { existing.Id });
-            dayResult.OvertimeSubmitted = ot.Success;
-            dayResult.OvertimeProtocol  = ot.Protocol;
-            dayResult.OvertimeError     = ot.Success ? null : (ot.ErrorMessage ?? "Overtime submission failed.");
+            return existing.Id;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Overtime part of schedule {D} failed for employee {E}", day.ScheduleDate, day.EmployeeId);
             dayResult.OvertimeError = ex.Message;
+            outcome.OvertimeFailed++;
+            return null;
+        }
+    }
+
+    /// <summary>Sends all queued overtime records through the normal overtime path in one request per
+    /// branch (so it is logged and, if Ergani refuses it, can be retried from the Overtime page).</summary>
+    private async Task SubmitOvertimeBatchAsync(
+        int companyId, List<(int Id, ScheduleSubmitDayResult Day)> queue, ScheduleSubmitResult outcome)
+    {
+        if (queue.Count == 0) return;
+
+        try
+        {
+            var ot = await _overtimeSubmitter.SubmitAsync(companyId, queue.Select(q => q.Id).ToList());
+            var accepted = ot.SubmittedIds.ToHashSet();
+
+            foreach (var (id, day) in queue)
+            {
+                if (accepted.Contains(id))
+                {
+                    day.OvertimeSubmitted = true;
+                    day.OvertimeProtocol  = ot.Protocol;
+                    outcome.OvertimeSubmitted++;
+                }
+                else
+                {
+                    day.OvertimeError = ot.Errors.TryGetValue(id, out var reason)
+                        ? reason
+                        : (ot.ErrorMessage ?? "Overtime submission failed.");
+                    outcome.OvertimeFailed++;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Batch overtime submission failed");
+            foreach (var (_, day) in queue) { day.OvertimeError = ex.Message; outcome.OvertimeFailed++; }
         }
     }
 
@@ -256,6 +301,7 @@ public class ScheduleSubmitterService : IScheduleSubmitter
         if (days.Count == 0) return outcome;
 
         await using var db = OpenDb();
+        var queue = new List<(int Id, ScheduleSubmitDayResult Day)>();
 
         foreach (var day in days.Where(d => d.BranchId > 0).OrderBy(d => d.ScheduleDate))
         {
@@ -273,9 +319,12 @@ public class ScheduleSubmitterService : IScheduleSubmitter
             };
             outcome.Days.Add(dayResult);
 
-            await SubmitOvertimePartAsync(db, companyId, day, r, dayResult);
-            if (dayResult.OvertimeSubmitted) outcome.OvertimeSubmitted++; else outcome.OvertimeFailed++;
+            if (await PrepareOvertimeAsync(db, day, r, dayResult, outcome) is int otId)
+                queue.Add((otId, dayResult));
         }
+
+        // One request per branch with every selected employee/day
+        await SubmitOvertimeBatchAsync(companyId, queue, outcome);
 
         return outcome;
     }

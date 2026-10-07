@@ -26,28 +26,39 @@ public sealed class OvertimeSubmitterService : IOvertimeSubmitter
             .ToListAsync(ct);
         if (records.Count == 0) return new() { ErrorMessage = "No eligible unsent overtime records were selected." };
 
+        // Records past the 2-hour cutoff are skipped (and reported); the rest are still sent.
+        var errors = new Dictionary<int, string>();
+        var eligible = new List<Overtime>();
         foreach (var r in records)
         {
             var cutoff = r.OvertimeDate.ToDateTime(r.EndTime).AddHours(-2);
             if (DateTime.Now >= cutoff)
-                return new() { ErrorMessage = $"Overtime for {r.Employee?.FullName ?? "employee"} ending at {r.EndTime:HH:mm} cannot be submitted now. The 2-hour submission cutoff was {cutoff:dd/MM/yyyy HH:mm}." };
+                errors[r.Id] = $"Overtime for {r.Employee?.FullName ?? "employee"} ending at {r.EndTime:HH:mm} cannot be submitted now. The 2-hour submission cutoff was {cutoff:dd/MM/yyyy HH:mm}.";
+            else eligible.Add(r);
         }
+        if (eligible.Count == 0)
+            return new() { ErrorMessage = string.Join(" ", errors.Values), Errors = errors };
 
-        var groups = records.GroupBy(x => new { x.BranchId, x.OvertimeDate, x.StartTime, x.EndTime, x.Justification, x.WeeklyWorkdaysNumber, x.AseeApproval });
         var credentials = new ErganiCredentials { Username = company.ErganiUsername, Password = _protector.Unprotect(company.ErganiPasswordEncrypted), Usertype = company.ErganiUsertype, BaseUrl = company.ErganiBaseUrl };
-        var total = 0; string? lastProtocol = null; string? lastSubmissionId = null; string? lastResponse = null;
+        var submittedIds = new List<int>(); string? lastProtocol = null; string? lastSubmissionId = null; string? lastResponse = null;
 
-        foreach (var group in groups)
+        // ONE request per branch containing every selected employee/day (the Ergani WTOOv body carries
+        // many employees and dates under one branch header; the justification is not part of it).
+        foreach (var group in eligible.GroupBy(x => x.BranchId))
         {
             var branch = group.First().Branch;
-            if (branch == null) continue;
+            if (branch == null)
+            {
+                foreach (var g in group) errors[g.Id] = "Branch not found.";
+                continue;
+            }
             var submission = new CompanyOvertimeSubmission
             {
                 BusinessBranchNumber = branch.BranchNumber, SepeServiceCode = branch.SepeServiceCode,
                 BusinessPrimaryActivityCode = branch.ActivityCode, BusinessBranchActivityCode = branch.ActivityCode,
                 KallikratisMunicipalCode = branch.KallikratisMunicipalCode,
                 LegalRepresentativeTaxIdentificationNumber = company.TaxId,
-                EmployeeOvertimes = group.Select(x => new OvertimeEntry
+                EmployeeOvertimes = group.OrderBy(x => x.OvertimeDate).ThenBy(x => x.StartTime).Select(x => new OvertimeEntry
                 {
                     EmployeeTaxIdentificationNumber = x.Employee!.TaxId, EmployeeSocialSecurityNumber = x.Employee.SocialSecurityNumber, EmployeeProfessionCode = x.Employee.ProfessionCode, EmployeeLastName = x.Employee.LastName, EmployeeFirstName = x.Employee.FirstName,
                     OvertimeDate = x.OvertimeDate, StartTime = x.StartTime, EndTime = x.EndTime, Justification = MapJustification(x.Justification),
@@ -58,20 +69,28 @@ public sealed class OvertimeSubmitterService : IOvertimeSubmitter
             var response = result.Data?.FirstOrDefault();
             var success = result.Success && response?.IsBusinessError != true && !string.IsNullOrWhiteSpace(response?.Protocol);
             var protocol = response?.Protocol; var submissionId = response?.SubmissionId;
+            var error = success ? null : (result.ErrorMessage ?? response?.Description ?? "Ergani overtime submission failed.");
             var submittedDate = DateOnly.FromDateTime(DateTime.Today);
             foreach (var entity in group)
             {
                 entity.SubmittedToErgani = success; entity.Protocol = protocol; entity.SubmissionId = submissionId;
                 entity.ResponseRawJson = result.ResponseRawJson; entity.RequestPayloadJson = result.RequestPayloadJson; entity.SubmittedDate = success ? submittedDate : null; entity.HttpStatusCode = result.HttpStatusCode;
+                if (success) submittedIds.Add(entity.Id); else errors[entity.Id] = error!;
             }
+            var employeeIds = group.Select(x => x.EmployeeId).Distinct().ToList();
             db.ApiSubmissionLogs.Add(new ApiSubmissionLog
-            { CompanyId = companyId, EmployeeId = group.Count() == 1 ? group.First().EmployeeId : null, SubmissionType = "Overtime", RequestPayloadJson = result.RequestPayloadJson, ResponseRawJson = result.ResponseRawJson, SubmissionId = submissionId, Protocol = protocol, SubmissionDate = DateTime.UtcNow, HttpStatusCode = result.HttpStatusCode, Success = success, ErrorMessage = success ? null : (result.ErrorMessage ?? response?.Description ?? "Ergani overtime submission failed."), DurationMs = result.DurationMs });
+            { CompanyId = companyId, EmployeeId = employeeIds.Count == 1 ? employeeIds[0] : null, SubmissionType = "Overtime", RequestPayloadJson = result.RequestPayloadJson, ResponseRawJson = result.ResponseRawJson, SubmissionId = submissionId, Protocol = protocol, SubmissionDate = DateTime.UtcNow, HttpStatusCode = result.HttpStatusCode, Success = success, ErrorMessage = error, DurationMs = result.DurationMs });
             await db.SaveChangesAsync(ct);
             lastProtocol = protocol; lastSubmissionId = submissionId; lastResponse = result.ResponseRawJson;
-            if (!success) return new() { Success = false, SubmittedCount = total, Protocol = protocol, SubmissionId = submissionId, ResponseRawJson = result.ResponseRawJson, ErrorMessage = result.ErrorMessage ?? response?.Description ?? "Ergani overtime submission failed." };
-            total += group.Count();
         }
-        return new() { Success = true, SubmittedCount = total, Protocol = lastProtocol, SubmissionId = lastSubmissionId, ResponseRawJson = lastResponse };
+
+        return new()
+        {
+            Success = errors.Count == 0 && submittedIds.Count > 0,
+            SubmittedCount = submittedIds.Count, SubmittedIds = submittedIds, Errors = errors,
+            Protocol = lastProtocol, SubmissionId = lastSubmissionId, ResponseRawJson = lastResponse,
+            ErrorMessage = errors.Count == 0 ? null : string.Join(" | ", errors.Values.Distinct())
+        };
     }
 
     private static ApiOvertimeJustification MapJustification(OvertimeJustification value) => value switch

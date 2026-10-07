@@ -97,6 +97,7 @@
             "Microsoft.Extensions.Logging": "10.0.10",
             "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
             "Microting.EntityFrameworkCore.MySql": "10.0.8",
+            "Selenium.WebDriver": "4.27.0",
             "Serilog": "4.4.0",
             "Serilog.Extensions.Logging": "10.0.0",
             "Serilog.Sinks.File": "7.0.0"
@@ -493,6 +494,7 @@
             "Microsoft.Extensions.Logging": "10.0.10",
             "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
             "Microting.EntityFrameworkCore.MySql": "10.0.8",
+            "Selenium.WebDriver": "4.27.0",
             "Serilog": "4.4.0",
             "Serilog.Extensions.Logging": "10.0.0",
             "Serilog.Sinks.File": "7.0.0"
@@ -862,6 +864,11 @@
               "target": "Package",
               "version": "[10.0.10, )",
               "versionCentrallyManaged": true
+            },
+            "Selenium.WebDriver": {
+              "target": "Package",
+              "version": "[4.27.0, )",
+              "versionCentrallyManaged": true
             }
           },
           "centralPackageVersions": {
@@ -884,6 +891,7 @@
             "Microsoft.Extensions.Logging": "10.0.10",
             "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
             "Microting.EntityFrameworkCore.MySql": "10.0.8",
+            "Selenium.WebDriver": "4.27.0",
             "Serilog": "4.4.0",
             "Serilog.Extensions.Logging": "10.0.0",
             "Serilog.Sinks.File": "7.0.0"
@@ -1265,6 +1273,7 @@
             "Microsoft.Extensions.Logging": "10.0.10",
             "Microsoft.Extensions.Logging.Abstractions": "10.0.10",
             "Microting.EntityFrameworkCore.MySql": "10.0.8",
+            "Selenium.WebDriver": "4.27.0",
             "Serilog": "4.4.0",
             "Serilog.Extensions.Logging": "10.0.0",
             "Serilog.Sinks.File": "7.0.0"
