@@ -28,19 +28,27 @@ private readonly IErganiDataImportService _erganiImport;
         = new();
 
     /*
-     * Ergani user types:
+     * Ergani user types (stored as the code, shown as a localized description):
      *
      * 01 = External
-     * 02 = ΕΡΓΑΝΗ
-     * 03 = ΕΦΚΑ
+     * 02 = Login with ERGANI credentials
+     * 03 = Login with EFKA credentials (construction works)
      */
-    public ObservableCollection<string> AvailableUsertypes { get; }
-        = new()
+    public ObservableCollection<LocalizedCodeOption> AvailableUsertypes { get; }
+        = new();
+
+    private void InitUsertypes()
+    {
+        AvailableUsertypes.Add(new LocalizedCodeOption("01", L.UsertypeExternal, Loc));
+        AvailableUsertypes.Add(new LocalizedCodeOption("02", L.UsertypeErgani, Loc));
+        AvailableUsertypes.Add(new LocalizedCodeOption("03", L.UsertypeEfka, Loc));
+
+        // Re-render the descriptions when the language changes
+        Loc.LanguageChanged += (_, _) =>
         {
-        "01",
-        "02",
-        "03"
+            foreach (var o in AvailableUsertypes) o.Refresh();
         };
+    }
 
     [ObservableProperty]
     private CompanyDto? _selectedCompany;
@@ -168,6 +176,8 @@ private readonly IErganiDataImportService _erganiImport;
 
         _erganiImport =
             erganiImport;
+
+        InitUsertypes();
     }
 
     // ---------------------------------------------------------------------

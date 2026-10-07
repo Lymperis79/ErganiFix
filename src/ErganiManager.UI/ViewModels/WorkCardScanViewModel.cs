@@ -144,13 +144,7 @@ public partial class WorkCardScanViewModel :
      * 002 = Problem with employer systems
      * 003 = Problem connecting to ERGANI
      */
-    public ObservableCollection<string> AvailableAitiologiai { get; } =
-        new()
-        {
-            "001",
-            "002",
-            "003"
-        };
+    public ObservableCollection<LocalizedCodeOption> AvailableAitiologiai { get; }
 
     [ObservableProperty] private bool _hasActiveCompany;
     [ObservableProperty] private string _noCompanyMessage = string.Empty;
@@ -201,6 +195,7 @@ public partial class WorkCardScanViewModel :
         _connectionState = connectionState;
         _companyService = companyService;
         _companyContext = companyContext;
+        AvailableAitiologiai = AitiologiaOptions.Create(Loc);
 
         /*
          * If the company is changed from the main AdminShell,
@@ -878,7 +873,7 @@ public partial class WorkCardScanViewModel :
 
         RetryAitiologia =
             AvailableAitiologiai
-                .FirstOrDefault();
+                .FirstOrDefault()?.Code;
 
         IsRetryDialogOpen =
             true;

@@ -22,6 +22,7 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
     private readonly IErganiDocumentService _documentService;
     private readonly ErganiRetryService _retryService;
     private readonly WorkCardLogRetryService _logRetryService;
+    private readonly IErganiPortalService _portalService;
     private readonly IConnectionStateService _connectionState;
     private UserSession? _session;
 
@@ -78,7 +79,8 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
         IErganiDocumentService documentService,
         IConnectionStateService connectionState,
         ErganiRetryService retryService,
-        WorkCardLogRetryService logRetryService)
+        WorkCardLogRetryService logRetryService,
+        IErganiPortalService portalService)
     {
         _historyService = historyService;
         _employeeService = employeeService;
@@ -87,6 +89,11 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
         _connectionState = connectionState;
         _retryService = retryService;
         _logRetryService = logRetryService;
+        _portalService = portalService;
+        _portalService.Progress += message =>
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => StatusMessage = message);
+        };
         _retryService.QueuedScanUpdated += OnQueuedScanUpdated;
     }
 
@@ -102,6 +109,27 @@ public partial class WorkCardHistoryViewModel : ViewModelBase, IAdminSectionView
 
         if (HasActiveCompany)
             _ = LoadFiltersAsync();
+    }
+
+    /// <summary>Opens the Ergani Work Cards page, logs in, fills today's date in both fields and searches.</summary>
+    [RelayCommand]
+    private async Task OpenErganiWorkCardsPortalAsync()
+    {
+        if (_session?.CompanyId is not int companyId)
+        {
+            StatusMessage = "Select a company first.";
+            return;
+        }
+
+        StatusMessage = "Opening the Ergani Work Cards portal…";
+        try
+        {
+            StatusMessage = await _portalService.OpenWorkCardsAsync(companyId, DateOnly.FromDateTime(DateTime.Today));
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"❌ {ex.Message}";
+        }
     }
 
     private async Task LoadFiltersAsync()

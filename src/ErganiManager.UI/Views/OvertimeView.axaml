@@ -16,9 +16,9 @@
                 <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                     <TextBlock Grid.Column="0" Text="{Binding Loc[Overtime]}" FontSize="22" FontWeight="Bold" />
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                        <TextBox Text="{Binding FilterFrom, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}" PlaceholderText="dd/mm/yyyy" />
+                        <DatePicker SelectedDate="{Binding FilterFrom, Mode=TwoWay}" HorizontalAlignment="Stretch" MinWidth="150" />
                         <TextBlock Text="→" VerticalAlignment="Center" />
-                        <TextBox Text="{Binding FilterTo, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}" PlaceholderText="dd/mm/yyyy" />
+                        <DatePicker SelectedDate="{Binding FilterTo, Mode=TwoWay}" HorizontalAlignment="Stretch" MinWidth="150" />
                         <Button Content="{Binding Loc[Load]}" Command="{Binding LoadRecordsCommand}" />
                     </StackPanel>
                     <Button Grid.Column="2" Content="Submit Selected" Command="{Binding SubmitSelectedCommand}" IsEnabled="{Binding HasSelection}" Margin="8,0,0,0" />
@@ -116,7 +116,7 @@
                     </ComboBox>
 
                     <TextBlock Text="{Binding Loc[OvertimeDate]}" FontWeight="SemiBold" />
-                    <TextBox Text="{Binding FormDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}" PlaceholderText="dd/mm/yyyy" />
+                    <DatePicker SelectedDate="{Binding FormDate, Mode=TwoWay}" HorizontalAlignment="Stretch" MinWidth="150" />
 
                     <Grid ColumnDefinitions="*,Auto,*">
                         <StackPanel Grid.Column="0" Spacing="4">

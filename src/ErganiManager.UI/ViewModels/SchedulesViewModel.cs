@@ -74,6 +74,9 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     private readonly IBranchService     _branchService;
     private readonly IScheduleSubmitter _scheduleSubmitter;
     private readonly IErganiDocumentService _documentService;
+    private readonly ILeaveService _leaveService;
+    private readonly IErganiPortalService _portalService;
+    private readonly ILeaveSubmitter _leaveSubmitter;
     private UserSession? _session;
 
     // ── Employee / navigation ─────────────────────────────────────────────────
@@ -128,6 +131,9 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     public string SubmitOvertimeButtonText => HasSelection
         ? $"⏱ Overtime of selected ({_selectedDates.Count})"
         : "⏱ Submit Overtime";
+    public string SubmitHolidaysButtonText => HasSelection
+        ? $"🏖 Holidays of selected ({_selectedDates.Count})"
+        : "🏖 Submit Holidays";
     public string DeleteSelectedButtonText => $"🗑 Delete selected ({_selectedDates.Count})";
 
     // ── Bulk / day dialog ─────────────────────────────────────────────────────
@@ -206,8 +212,14 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     public SchedulesViewModel(IScheduleService scheduleService,
         IEmployeeService employeeService, IBranchService branchService,
         IScheduleSubmitter scheduleSubmitter, IErganiDocumentService documentService,
-        ILeaveService leaveService, ILeaveSubmitter leaveSubmitter)
+        ILeaveService leaveService, ILeaveSubmitter leaveSubmitter,
+        IErganiPortalService portalService)
     {
+        _portalService  = portalService;
+        _portalService.Progress += message =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => StatusMessage = message);
+        _leaveService   = leaveService;
+        _leaveSubmitter = leaveSubmitter;
         Holidays = new HolidayDialogViewModel(leaveService, leaveSubmitter, documentService);
         Holidays.HolidaysChanged += (_, _) => _ = RefreshCalendarAsync();
         _scheduleService   = scheduleService;
@@ -462,6 +474,7 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         OnPropertyChanged(nameof(SelectionLabel));
         OnPropertyChanged(nameof(SubmitScheduleButtonText));
         OnPropertyChanged(nameof(SubmitOvertimeButtonText));
+        OnPropertyChanged(nameof(SubmitHolidaysButtonText));
         OnPropertyChanged(nameof(DeleteSelectedButtonText));
     }
 
@@ -1044,6 +1057,68 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
                 StatusMessage = $"❌ {result.OvertimeSubmitted} overtime sent, {result.OvertimeFailed} NOT sent — " +
                                 $"{bad.Date:dd/MM}: {bad.OvertimeError} (the unsent ones are saved on the Overtime page).";
             }
+
+            await RefreshCalendarAsync();
+        }
+        catch (Exception ex) { StatusMessage = $"❌ {ex.Message}"; }
+    }
+
+    /// <summary>Opens the Ergani web portal in the browser, logged in with the company's saved credentials.</summary>
+    [RelayCommand]
+    private async Task OpenErganiPortalAsync()
+    {
+        if (_session?.CompanyId is not int companyId) { StatusMessage = "Select a company first."; return; }
+        StatusMessage = "Opening the Ergani portal…";
+        // The month shown in the calendar: its first and last day fill the page's date boxes
+        var first = new DateOnly(Year, Month, 1);
+        var last  = new DateOnly(Year, Month, DateTime.DaysInMonth(Year, Month));
+        try { StatusMessage = await _portalService.OpenAsync(companyId, first, last); }
+        catch (Exception ex) { StatusMessage = $"❌ {ex.Message}"; }
+    }
+
+    /// <summary>
+    /// Same idea as <see cref="SubmitOvertimesAsync"/>: with days selected only the saved,
+    /// unsent holidays on those days are submitted to Ergani; otherwise the displayed month.
+    /// </summary>
+    [RelayCommand]
+    private async Task SubmitHolidaysAsync()
+    {
+        if (SelectedEmployee == null || _session?.CompanyId is not int companyId)
+        { StatusMessage = "Select an employee first."; return; }
+        try
+        {
+            var picked = _selectedDates.ToHashSet();
+            DateOnly from, to;
+            if (picked.Count > 0) { from = picked.Min(); to = picked.Max(); }
+            else
+            {
+                from = new DateOnly(Year, Month, 1);
+                to   = from.AddMonths(1).AddDays(-1);
+            }
+
+            var leaves = await _leaveService.GetByEmployeeDateRangeAsync(companyId, SelectedEmployee.Id, from, to);
+            if (picked.Count > 0) leaves = leaves.Where(l => picked.Contains(l.LeaveDate)).ToList();
+
+            var unsent = leaves.Where(l => !l.SubmittedToErgani).ToList();
+            if (unsent.Count == 0)
+            {
+                StatusMessage = leaves.Count > 0
+                    ? "All holidays on the selected day(s) are already submitted."
+                    : picked.Count > 0
+                        ? "No saved holidays on the selected day(s). Use 🏖 Holidays to add them."
+                        : "No saved holidays this month. Use 🏖 Holidays to add them.";
+                return;
+            }
+
+            StatusMessage = $"Submitting {unsent.Count} holiday day(s) to Ergani…";
+            var result = await _leaveSubmitter.SubmitAsync(companyId, unsent.Select(l => l.Id).ToList());
+
+            if (result.FailedCount == 0 && result.SubmittedCount > 0)
+                StatusMessage = $"✅ Submitted {result.SubmittedCount} holiday day(s) to Ergani.";
+            else if (result.SubmittedCount == 0)
+                StatusMessage = $"❌ Not sent — {result.ErrorMessage}";
+            else
+                StatusMessage = $"❌ {result.SubmittedCount} day(s) sent, {result.FailedCount} NOT sent — {result.ErrorMessage}";
 
             await RefreshCalendarAsync();
         }

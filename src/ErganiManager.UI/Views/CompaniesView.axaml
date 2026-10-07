@@ -71,10 +71,17 @@
                         <TextBlock Text="{Binding Loc[ErganiBaseUrl]}" FontWeight="SemiBold" />
                         <TextBox Text="{Binding FormErganiBaseUrl}" />
 
-                        <TextBlock Text="User Type (Usertype)" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Loc[UserType]}" FontWeight="SemiBold" />
                         <ComboBox ItemsSource="{Binding AvailableUsertypes}"
-                                  SelectedItem="{Binding FormErganiUsertype}"
-                                  HorizontalAlignment="Stretch" />
+                                  SelectedValueBinding="{Binding Code}"
+                                  SelectedValue="{Binding FormErganiUsertype}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
 
                         <!-- Ergani credential test -->
                         <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">

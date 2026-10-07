@@ -223,9 +223,16 @@
                            FontSize="12"
                            Foreground="Gray" />
 
-                <ComboBox ItemsSource="{Binding LateJustificationCodes}"
-                          SelectedItem="{Binding SelectedLateJustification, Mode=TwoWay}"
-                          MinWidth="90" />
+                <ComboBox ItemsSource="{Binding LateJustificationOptions}"
+                          SelectedValueBinding="{Binding Code}"
+                          SelectedValue="{Binding SelectedLateJustification, Mode=TwoWay}"
+                          MinWidth="320">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:LocalizedCodeOption">
+                            <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
 
             </StackPanel>
 

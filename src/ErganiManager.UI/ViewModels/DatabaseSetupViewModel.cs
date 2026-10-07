@@ -187,7 +187,7 @@ public partial class DatabaseSetupViewModel : ViewModelBase
             var optionsBuilder = new Microsoft.EntityFrameworkCore.DbContextOptionsBuilder<AppDbContext>();
             DbProviderFactory.Configure(optionsBuilder, config);
             await using var db = new AppDbContext(optionsBuilder.Options);
-            await db.Database.EnsureCreatedAsync();
+            await DatabaseMigrator.ApplyAsync(config);
 
             // Schema is confirmed — now safe to persist the connection config.
             _connectionState.SaveConfig(config);

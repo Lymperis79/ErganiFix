@@ -50,6 +50,8 @@ public partial class App : Application
         var splash = new Window
         {
             Title = "Ergani Manager",
+            Icon = new WindowIcon(Avalonia.Platform.AssetLoader.Open(
+                new Uri("avares://ErganiManager.UI/Assets/icon.png"))),
             Width = 340,
             Height = 160,
             WindowStartupLocation = WindowStartupLocation.CenterScreen,
@@ -136,6 +138,14 @@ public partial class App : Application
             {
                 if (w != sender) w.Close();
             }
+
+            // Selenium browsers/drivers are external processes. Close them before
+            // terminating the application so ChromeDriver/EdgeDriver is not left behind.
+            try
+            {
+                ErganiManager.ErganiApi.Services.ErganiPortalService.ShutdownAllBrowsers();
+            }
+            catch { /* shutdown must never prevent application exit */ }
         }
         Environment.Exit(0);
     }

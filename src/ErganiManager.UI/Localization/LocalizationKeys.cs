@@ -155,6 +155,35 @@ public static class L
     public const string ErrorPrefix         = nameof(ErrorPrefix);
     public const string SuccessPrefix       = nameof(SuccessPrefix);
 
+    // Ergani user types
+    public const string UsertypeExternal    = nameof(UsertypeExternal);
+    public const string UsertypeErgani      = nameof(UsertypeErgani);
+    public const string UsertypeEfka        = nameof(UsertypeEfka);
+    public const string UserType            = nameof(UserType);
+
+    // Late reasons (f_aitiologia)
+    public const string AitiologiaPower     = nameof(AitiologiaPower);
+    public const string AitiologiaEmployer  = nameof(AitiologiaEmployer);
+    public const string AitiologiaErgani    = nameof(AitiologiaErgani);
+
+    // Reports
+    public const string NavReports          = nameof(NavReports);
+
+    // Administration / Help
+    public const string NavHelp             = nameof(NavHelp);
+    public const string NavAdmin            = nameof(NavAdmin);
+    public const string AdminTitle          = nameof(AdminTitle);
+    public const string AdminDatabase       = nameof(AdminDatabase);
+    public const string AdminBackup         = nameof(AdminBackup);
+    public const string AdminLocalCache     = nameof(AdminLocalCache);
+    public const string AdminDeleteCache    = nameof(AdminDeleteCache);
+    public const string AdminDangerZone     = nameof(AdminDangerZone);
+    public const string AdminDeleteDb       = nameof(AdminDeleteDb);
+    public const string AdminConfirm        = nameof(AdminConfirm);
+    public const string HelpTitle           = nameof(HelpTitle);
+    public const string HelpEditAction      = nameof(HelpEditAction);
+    public const string HelpResetDefault    = nameof(HelpResetDefault);
+
     // Language
     public const string Language            = nameof(Language);
 }

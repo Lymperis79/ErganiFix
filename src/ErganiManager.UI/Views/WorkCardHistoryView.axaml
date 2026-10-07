@@ -30,10 +30,14 @@
                            FontSize="22"
                            FontWeight="Bold" />
 
-                <Button Grid.Column="1"
-                        Content="⬇ Export to Excel"
-                        Command="{Binding ExportToExcelCommand}"
-                        IsEnabled="{Binding !IsLoading}" />
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                    <Button Content="🌐 Open Work Cards portal"
+                            Command="{Binding OpenErganiWorkCardsPortalCommand}"
+                            IsEnabled="{Binding !IsLoading}" />
+                    <Button Content="⬇ Export to Excel"
+                            Command="{Binding ExportToExcelCommand}"
+                            IsEnabled="{Binding !IsLoading}" />
+                </StackPanel>
 
             </Grid>
 

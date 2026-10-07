@@ -46,13 +46,11 @@
 
                         <StackPanel Grid.Row="1" Grid.Column="0" Spacing="4">
                             <TextBlock Text="From" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding FromDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}"
-                                     PlaceholderText="dd/mm/yyyy" />
+                            <DatePicker SelectedDate="{Binding FromDate, Mode=TwoWay}" HorizontalAlignment="Stretch" MinWidth="150" />
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="1" Spacing="4">
                             <TextBlock Text="To (inclusive)" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding ToDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}"
-                                     PlaceholderText="dd/mm/yyyy" />
+                            <DatePicker SelectedDate="{Binding ToDate, Mode=TwoWay}" HorizontalAlignment="Stretch" MinWidth="150" />
                         </StackPanel>
                         <CheckBox Grid.Row="1" Grid.Column="2" Content="Skip Saturday / Sunday"
                                   IsChecked="{Binding SkipWeekends}" VerticalAlignment="Bottom" />

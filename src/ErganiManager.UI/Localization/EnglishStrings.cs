@@ -159,6 +159,34 @@ public static class EnglishStrings
         [L.ErrorPrefix]         = "❌ ",
         [L.SuccessPrefix]       = "✅ ",
 
+        // ── Ergani user types ─────────────────────────────────
+        [L.UserType]            = "User Type (Usertype)",
+        [L.UsertypeExternal]    = "External",
+        [L.UsertypeErgani]      = "Login with \"ERGANI\" credentials",
+        [L.UsertypeEfka]        = "Login with credentials for Construction Works from EFKA",
+
+        [L.NavReports] = "📊 Reports",
+
+        // ── Late reasons (f_aitiologia) ───────────────────────
+        [L.AitiologiaPower] = "Power outage / telecommunications problem (POWER_OUTAGE)",
+        [L.AitiologiaEmployer] = "Employer systems problem (EMPLOYER_SYSTEMS_UNAVAILABLE)",
+        [L.AitiologiaErgani] = "Problem connecting to ERGANI (ERGANI_SYSTEMS_UNAVAILABLE)",
+
+        // ── Administration / Help ─────────────────────────────
+        [L.NavHelp] = "❓ Help",
+        [L.NavAdmin] = "🛠 Administration",
+        [L.AdminTitle] = "Administration",
+        [L.AdminDatabase] = "Database",
+        [L.AdminBackup] = "💾 Backup database…",
+        [L.AdminLocalCache] = "Temporary local database (cache)",
+        [L.AdminDeleteCache] = "🧹 Delete local cache",
+        [L.AdminDangerZone] = "Danger zone",
+        [L.AdminDeleteDb] = "🗑 Delete database…",
+        [L.AdminConfirm] = "Confirm",
+        [L.HelpTitle] = "Help",
+        [L.HelpEditAction] = "✏ Edit",
+        [L.HelpResetDefault] = "↺ Restore default",
+
         // ── Language ──────────────────────────────────────────
         [L.Language]            = "Language",
     };

@@ -52,7 +52,7 @@
                             </StackPanel>
 
                             <TextBlock Text="Date" FontWeight="SemiBold" />
-                            <TextBox Text="{Binding MovementDate, Converter={x:Static vm:DateOffsetStringConverter.Instance}, Mode=TwoWay}" PlaceholderText="dd/mm/yyyy" />
+                            <DatePicker SelectedDate="{Binding MovementDate, Mode=TwoWay}" HorizontalAlignment="Stretch" MinWidth="150" />
 
                             <TextBlock Text="Time" FontWeight="SemiBold" />
                             <TimePicker SelectedTime="{Binding MovementTime}"
@@ -182,8 +182,15 @@
                     <TextBlock Grid.Row="2" Text="Select reason for late submission (f_aitiologia):"
                                FontWeight="SemiBold" Margin="0,0,0,6" />
                     <ComboBox Grid.Row="3" ItemsSource="{Binding AvailableAitiologiai}"
-                              SelectedItem="{Binding RetryAitiologia}"
-                              HorizontalAlignment="Stretch" Margin="0,0,0,16" />
+                              SelectedValueBinding="{Binding Code}"
+                              SelectedValue="{Binding RetryAitiologia}"
+                              HorizontalAlignment="Stretch" Margin="0,0,0,16">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:LocalizedCodeOption">
+                                <TextBlock Text="{Binding Display}" TextWrapping="Wrap" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
                     <Grid Grid.Row="4" ColumnDefinitions="*,*" ColumnSpacing="8">
                         <Button Grid.Column="0" Content="Cancel"
                                 Command="{Binding CloseRetryDialogCommand}"

@@ -91,7 +91,7 @@ public partial class OvertimeViewModel : ViewModelBase, IAdminSectionViewModel
         try
         {
             var result = await _overtimeSubmitter.SubmitAsync(companyId, ids);
-            StatusMessage = result.Success ? $"✅ Submitted {result.SubmittedCount} overtime record(s). Protocol: {result.Protocol}" : $"❌ {result.ErrorMessage}";
+            StatusMessage = result.Success ? $"✅ Submitted {result.SubmittedCount} overtime record(s) in one request per branch. Protocol: {result.Protocol}" : result.SubmittedCount > 0 ? $"⚠ {result.SubmittedCount} sent, {result.Errors.Count} NOT sent — {result.ErrorMessage}" : $"❌ {result.ErrorMessage}";
             _selectedIds.Clear(); OnPropertyChanged(nameof(HasSelection)); await LoadRecordsAsync();
             if (!string.IsNullOrWhiteSpace(result.ResponseRawJson)) ShowResponse("Ergani Overtime Response", result.ResponseRawJson);
         }

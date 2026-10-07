@@ -159,6 +159,34 @@ public static class GreekStrings
         [L.ErrorPrefix]         = "❌ ",
         [L.SuccessPrefix]       = "✅ ",
 
+        // ── Ergani user types ─────────────────────────────────
+        [L.UserType]            = "Τύπος χρήστη (Usertype)",
+        [L.UsertypeExternal]    = "Εξωτερικός",
+        [L.UsertypeErgani]      = "Σύνδεση με κωδικούς \"ΕΡΓΑΝΗ\"",
+        [L.UsertypeEfka]        = "Σύνδεση με κωδικούς για Οικοδομοτεχνικά Έργα από ΕΦΚΑ",
+
+        [L.NavReports] = "📊 Αναφορές",
+
+        // ── Late reasons (f_aitiologia) ───────────────────────
+        [L.AitiologiaPower] = "ΠΡΟΒΛΗΜΑ ΣΤΗΝ ΗΛΕΚΤΡΟΔΟΤΗΣΗ/ΤΗΛΕΠΙΚΟΙΝΩΝΙΕΣ (POWER_OUTAGE)",
+        [L.AitiologiaEmployer] = "ΠΡΟΒΛΗΜΑ ΣΤΑ ΣΥΣΤΗΜΑΤΑ ΤΟΥ ΕΡΓΟΔΟΤΗ (EMPLOYER_SYSTEMS_UNAVAILABLE)",
+        [L.AitiologiaErgani] = "ΠΡΟΒΛΗΜΑ ΣΥΝΔΕΣΗΣ ΜΕ ΤΟ ΠΣ ΕΡΓΑΝΗ (ERGANI_SYSTEMS_UNAVAILABLE)",
+
+        // ── Administration / Help ─────────────────────────────
+        [L.NavHelp] = "❓ Βοήθεια",
+        [L.NavAdmin] = "🛠 Διαχείριση",
+        [L.AdminTitle] = "Διαχείριση",
+        [L.AdminDatabase] = "Βάση δεδομένων",
+        [L.AdminBackup] = "💾 Αντίγραφο ασφαλείας βάσης…",
+        [L.AdminLocalCache] = "Προσωρινή τοπική βάση (cache)",
+        [L.AdminDeleteCache] = "🧹 Διαγραφή τοπικής cache",
+        [L.AdminDangerZone] = "Επικίνδυνη ζώνη",
+        [L.AdminDeleteDb] = "🗑 Διαγραφή βάσης δεδομένων…",
+        [L.AdminConfirm] = "Επιβεβαίωση",
+        [L.HelpTitle] = "Βοήθεια",
+        [L.HelpEditAction] = "✏ Επεξεργασία",
+        [L.HelpResetDefault] = "↺ Επαναφορά προεπιλογής",
+
         // ── Language ──────────────────────────────────────────
         [L.Language]            = "Γλώσσα",
     };

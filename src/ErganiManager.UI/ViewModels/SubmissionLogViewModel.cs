@@ -133,8 +133,7 @@ public partial class SubmissionLogViewModel
     /// f_aitiologia codes offered for retries made MORE than 10 minutes after the first
     /// attempt. Within 10 minutes the field is always sent empty.
     /// </summary>
-    public ObservableCollection<string> LateJustificationCodes { get; } =
-        new() { "001", "002", "003" };
+    public ObservableCollection<LocalizedCodeOption> LateJustificationOptions { get; }
 
     [ObservableProperty]
     private string _selectedLateJustification = WorkCardLogRetryService.DefaultLateJustification;
@@ -172,6 +171,7 @@ public partial class SubmissionLogViewModel
         _connectionState = connectionState;
         _retryService = retryService;
         _logRetryService = logRetryService;
+        LateJustificationOptions = AitiologiaOptions.Create(Loc);
     }
 
     public void Initialize(UserSession session)

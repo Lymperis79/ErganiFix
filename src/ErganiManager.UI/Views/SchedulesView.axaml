@@ -7,34 +7,51 @@
 
     <Grid RowDefinitions="Auto,Auto,Auto,*">
 
-        <!-- Row 0: Header -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,0,0,8">
-            <TextBlock Grid.Column="0" Text="{Binding Loc[Schedules]}" FontSize="22" FontWeight="Bold" />
-            <Button Grid.Column="1" Content="⬆ Import"
-                    Command="{Binding RequestImportCommand}"
-                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="2" Content="📋 Bulk Apply"
-                    Command="{Binding OpenBulkDialogCommand}"
-                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="3" Content="👥 Clone to..."
-                    Command="{Binding OpenCloneDialogCommand}"
-                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="4" Content="{Binding Loc[ExportMonth]}"
-                    Command="{Binding ExportMonthCommand}"
-                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="5" Content="{Binding SubmitScheduleButtonText}"
-                    Command="{Binding SubmitScheduleToErganiCommand}"
-                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="6" Content="{Binding SubmitOvertimeButtonText}"
-                    Command="{Binding SubmitOvertimesCommand}"
-                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="7" Content="🏖 Holidays"
-                    Command="{Binding OpenHolidaysCommand}"
-                    Margin="0,0,6,0" IsEnabled="{Binding HasActiveCompany}" />
-            <Button Grid.Column="8" Content="📜 Log"
-                    Command="{Binding OpenLogCommand}"
-                    IsEnabled="{Binding HasActiveCompany}" />
-        </Grid>
+        <!-- Row 0: Header — title + two lines of buttons.
+             Each line is a WrapPanel, so on a small window the buttons flow onto
+             the next line instead of being cut off. -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,8" Spacing="6">
+
+            <TextBlock Text="{Binding Loc[Schedules]}" FontSize="22" FontWeight="Bold" />
+
+            <!-- Line 1: working with the schedule data -->
+            <WrapPanel Orientation="Horizontal">
+                <Button Content="⬆ Import"
+                        Command="{Binding RequestImportCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="📋 Bulk Apply"
+                        Command="{Binding OpenBulkDialogCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="👥 Clone to..."
+                        Command="{Binding OpenCloneDialogCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="{Binding Loc[ExportMonth]}"
+                        Command="{Binding ExportMonthCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="🏖 Holidays"
+                        Command="{Binding OpenHolidaysCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="📜 Log"
+                        Command="{Binding OpenLogCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+            </WrapPanel>
+
+            <!-- Line 2: sending to Ergani -->
+            <WrapPanel Orientation="Horizontal">
+                <Button Content="{Binding SubmitScheduleButtonText}"
+                        Command="{Binding SubmitScheduleToErganiCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="{Binding SubmitOvertimeButtonText}"
+                        Command="{Binding SubmitOvertimesCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="{Binding SubmitHolidaysButtonText}"
+                        Command="{Binding SubmitHolidaysCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+                <Button Content="🌐 Open Schedule Ergani portal"
+                        Command="{Binding OpenErganiPortalCommand}"
+                        Margin="0,0,6,6" IsEnabled="{Binding HasActiveCompany}" />
+            </WrapPanel>
+        </StackPanel>
 
         <!-- Row 1: Controls bar -->
         <Border Grid.Row="1" Background="#1A1D23" CornerRadius="8" Padding="12" Margin="0,0,0,8">
@@ -101,96 +118,189 @@
 
         <!-- Row 3: Calendar -->
         <ScrollViewer Grid.Row="3">
-            <StackPanel>
+            <!-- Calendar -->
+<StackPanel>
 
-                <!-- Tip -->
-                <TextBlock Text="Click a day to open it · Ctrl+Click to select days, then Submit / Bulk Apply / Delete act on just those days"
-                           FontSize="11" Foreground="#666" Margin="0,0,0,8" />
+    <TextBlock Text="Click a day to open it · Ctrl+Click to select days, then Submit / Bulk Apply / Delete act on just those days"
+               FontSize="11"
+               Foreground="#666"
+               Margin="0,0,0,8" />
 
-                <!-- Day-of-week headers -->
-                <Grid ColumnDefinitions="*,*,*,*,*,*,*" Margin="0,0,0,4">
-                    <TextBlock Grid.Column="0" Text="Mon" HorizontalAlignment="Center" Foreground="#888" FontSize="12"/>
-                    <TextBlock Grid.Column="1" Text="Tue" HorizontalAlignment="Center" Foreground="#888" FontSize="12"/>
-                    <TextBlock Grid.Column="2" Text="Wed" HorizontalAlignment="Center" Foreground="#888" FontSize="12"/>
-                    <TextBlock Grid.Column="3" Text="Thu" HorizontalAlignment="Center" Foreground="#888" FontSize="12"/>
-                    <TextBlock Grid.Column="4" Text="Fri" HorizontalAlignment="Center" Foreground="#888" FontSize="12"/>
-                    <TextBlock Grid.Column="5" Text="Sat" HorizontalAlignment="Center" Foreground="#777" FontSize="12"/>
-                    <TextBlock Grid.Column="6" Text="Sun" HorizontalAlignment="Center" Foreground="#777" FontSize="12"/>
-                </Grid>
+    <!-- Header + dates use exactly the same 7-column grid -->
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto"
+          ColumnDefinitions="*,*,*,*,*,*,*"
+          ColumnSpacing="4"
+          RowSpacing="4">
 
-                <!-- Calendar cells -->
-                <ItemsControl ItemsSource="{Binding Cells}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel Orientation="Horizontal" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:CalendarCellViewModel">
-                            <Panel Width="120" Height="110" Margin="2">
+        <!-- Day headers -->
+        <TextBlock Grid.Row="0" Grid.Column="0"
+                   Text="Mon"
+                   HorizontalAlignment="Center"
+                   Foreground="#888"
+                   FontSize="12"/>
 
-                                <!-- Empty filler -->
-                                <Border IsVisible="{Binding !IsInMonth}" />
+        <TextBlock Grid.Row="0" Grid.Column="1"
+                   Text="Tue"
+                   HorizontalAlignment="Center"
+                   Foreground="#888"
+                   FontSize="12"/>
 
-                                <!-- Day cell -->
-                                <Border IsVisible="{Binding IsInMonth}"
-                                        Tag="{Binding}"
-                                        PointerPressed="OnCellPressed"
-                                        CornerRadius="8" Cursor="Hand"
-                                        Padding="8,6"
-                                        BorderThickness="2">
-                                    <Border.Background>
-                                        <SolidColorBrush Color="#1A1D23" />
-                                    </Border.Background>
-                                    <Border.Styles>
-                                        <Style Selector="Border:pointerover">
-                                            <Setter Property="Background" Value="#22252C" />
-                                        </Style>
-                                    </Border.Styles>
-                                    <Border.BorderBrush>
-                                        <SolidColorBrush Color="#3A3F4B" />
-                                    </Border.BorderBrush>
+        <TextBlock Grid.Row="0" Grid.Column="2"
+                   Text="Wed"
+                   HorizontalAlignment="Center"
+                   Foreground="#888"
+                   FontSize="12"/>
 
-                                    <StackPanel ToolTip.Tip="{Binding HolidayTooltip}">
-                                        <Grid ColumnDefinitions="*,Auto">
-                                            <TextBlock Grid.Column="0" Text="{Binding DayNumberText}"
-                                                       FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{Binding IsToday,
-                                                           Converter={x:Static vm:BoolToBackgroundConverter.Instance}}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding WorkTypeIcon}"
-                                                       FontSize="13" />
-                                        </Grid>
-                                        <TextBlock Text="{Binding TimeRangeText}" FontSize="10"
-                                                   Foreground="#AAAAAA" TextWrapping="Wrap" />
-                                        <Border IsVisible="{Binding HasOfficialHoliday}"
-                                                Background="#3A2F1B" CornerRadius="3"
-                                                Padding="4,1" Margin="0,2,0,0">
-                                            <TextBlock Text="{Binding OfficialHolidayText}" FontSize="9"
-                                                       Foreground="#FFD180" TextTrimming="CharacterEllipsis" />
-                                        </Border>
-                                        <Border IsVisible="{Binding HasUserHoliday}"
-                                                Background="#1E3545" CornerRadius="3"
-                                                Padding="4,1" Margin="0,2,0,0">
-                                            <TextBlock Text="{Binding UserHolidayText}" FontSize="9"
-                                                       Foreground="#90CAF9" TextTrimming="CharacterEllipsis" />
-                                        </Border>
-                                        <TextBlock Text="📤 sent" FontSize="9" Foreground="#81C784"
-                                                   IsVisible="{Binding IsSubmitted}" />
-                                        <!-- Selected indicator -->
-                                        <Border IsVisible="{Binding IsSelected}"
-                                                Background="#1B5E20" CornerRadius="3"
-                                                Padding="4,1" Margin="0,2,0,0">
-                                            <TextBlock Text="✓ Selected" FontSize="9" Foreground="#81C784" />
-                                        </Border>
-                                    </StackPanel>
+        <TextBlock Grid.Row="0" Grid.Column="3"
+                   Text="Thu"
+                   HorizontalAlignment="Center"
+                   Foreground="#888"
+                   FontSize="12"/>
+
+        <TextBlock Grid.Row="0" Grid.Column="4"
+                   Text="Fri"
+                   HorizontalAlignment="Center"
+                   Foreground="#888"
+                   FontSize="12"/>
+
+        <TextBlock Grid.Row="0" Grid.Column="5"
+                   Text="Sat"
+                   HorizontalAlignment="Center"
+                   Foreground="#777"
+                   FontSize="12"/>
+
+        <TextBlock Grid.Row="0" Grid.Column="6"
+                   Text="Sun"
+                   HorizontalAlignment="Center"
+                   Foreground="#777"
+                   FontSize="12"/>
+
+
+        <!-- Calendar cells -->
+        <ItemsControl Grid.Row="1"
+                      Grid.RowSpan="6"
+                      Grid.Column="0"
+                      Grid.ColumnSpan="7"
+                      ItemsSource="{Binding Cells}">
+
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Columns="7" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:CalendarCellViewModel">
+
+                    <Panel Margin="2"
+                           MinHeight="110">
+
+                        <!-- Empty filler -->
+                        <Border IsVisible="{Binding !IsInMonth}" />
+
+                        <!-- Day cell -->
+                        <Border IsVisible="{Binding IsInMonth}"
+                                Tag="{Binding}"
+                                PointerPressed="OnCellPressed"
+                                CornerRadius="8"
+                                Cursor="Hand"
+                                Padding="8,6"
+                                BorderThickness="2">
+
+                            <Border.Background>
+                                <SolidColorBrush Color="#1A1D23" />
+                            </Border.Background>
+
+                            <Border.Styles>
+                                <Style Selector="Border:pointerover">
+                                    <Setter Property="Background"
+                                            Value="#22252C" />
+                                </Style>
+                            </Border.Styles>
+
+                            <Border.BorderBrush>
+                                <SolidColorBrush Color="#3A3F4B" />
+                            </Border.BorderBrush>
+
+                            <StackPanel ToolTip.Tip="{Binding HolidayTooltip}">
+
+                                <Grid ColumnDefinitions="*,Auto">
+
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding DayNumberText}"
+                                               FontSize="13"
+                                               FontWeight="SemiBold"
+                                               Foreground="{Binding IsToday,
+                                                   Converter={x:Static vm:BoolToBackgroundConverter.Instance}}" />
+
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding WorkTypeIcon}"
+                                               FontSize="13" />
+
+                                </Grid>
+
+                                <TextBlock Text="{Binding TimeRangeText}"
+                                           FontSize="10"
+                                           Foreground="#AAAAAA"
+                                           TextWrapping="Wrap" />
+
+                                <Border IsVisible="{Binding HasOfficialHoliday}"
+                                        Background="#3A2F1B"
+                                        CornerRadius="3"
+                                        Padding="4,1"
+                                        Margin="0,2,0,0">
+
+                                    <TextBlock Text="{Binding OfficialHolidayText}"
+                                               FontSize="9"
+                                               Foreground="#FFD180"
+                                               TextTrimming="CharacterEllipsis" />
 
                                 </Border>
-                            </Panel>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
 
-            </StackPanel>
+                                <Border IsVisible="{Binding HasUserHoliday}"
+                                        Background="#1E3545"
+                                        CornerRadius="3"
+                                        Padding="4,1"
+                                        Margin="0,2,0,0">
+
+                                    <TextBlock Text="{Binding UserHolidayText}"
+                                               FontSize="9"
+                                               Foreground="#90CAF9"
+                                               TextTrimming="CharacterEllipsis" />
+
+                                </Border>
+
+                                <TextBlock Text="📤 sent"
+                                           FontSize="9"
+                                           Foreground="#81C784"
+                                           IsVisible="{Binding IsSubmitted}" />
+
+                                <Border IsVisible="{Binding IsSelected}"
+                                        Background="#1B5E20"
+                                        CornerRadius="3"
+                                        Padding="4,1"
+                                        Margin="0,2,0,0">
+
+                                    <TextBlock Text="✓ Selected"
+                                               FontSize="9"
+                                               Foreground="#81C784" />
+
+                                </Border>
+
+                            </StackPanel>
+
+                        </Border>
+
+                    </Panel>
+
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+
+        </ItemsControl>
+
+    </Grid>
+
+</StackPanel>
         </ScrollViewer>
 
         <!-- ── Day dialog overlay ── -->
@@ -220,18 +330,13 @@
                                         <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
-                                <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                                    <StackPanel Grid.Column="0" Spacing="4">
-                                        <TextBlock Text="{Binding Loc[StartTime]}" FontWeight="SemiBold" />
-                                        <TimePicker SelectedTime="{Binding EditingStartTime}"
-                                                    ClockIdentifier="24HourClock" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Spacing="4">
-                                        <TextBlock Text="{Binding Loc[EndTime]}" FontWeight="SemiBold" />
-                                        <TimePicker SelectedTime="{Binding EditingEndTime}"
-                                                    ClockIdentifier="24HourClock" />
-                                    </StackPanel>
-                                </Grid>
+                                <!-- Stacked vertically: TimePicker has a wide minimum width and overlapped when side by side -->
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="{Binding Loc[StartTime]}" FontWeight="SemiBold" />
+                                    <TimePicker SelectedTime="{Binding EditingStartTime}" ClockIdentifier="24HourClock" HorizontalAlignment="Stretch" />
+                                    <TextBlock Text="{Binding Loc[EndTime]}" FontWeight="SemiBold" />
+                                    <TimePicker SelectedTime="{Binding EditingEndTime}" ClockIdentifier="24HourClock" HorizontalAlignment="Stretch" />
+                                </StackPanel>
                             </StackPanel>
 
                             <TextBlock Text="{Binding EditingOvertimeNote}" Foreground="#FFB74D"
@@ -295,18 +400,13 @@
                                     <DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                                <StackPanel Grid.Column="0" Spacing="4">
-                                    <TextBlock Text="{Binding Loc[StartTime]}" FontWeight="SemiBold" />
-                                    <TimePicker SelectedTime="{Binding BulkStartTime}"
-                                                ClockIdentifier="24HourClock" />
-                                </StackPanel>
-                                <StackPanel Grid.Column="1" Spacing="4">
-                                    <TextBlock Text="{Binding Loc[EndTime]}" FontWeight="SemiBold" />
-                                    <TimePicker SelectedTime="{Binding BulkEndTime}"
-                                                ClockIdentifier="24HourClock" />
-                                </StackPanel>
-                            </Grid>
+                            <!-- Stacked vertically: TimePicker has a wide minimum width and overlapped when side by side -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding Loc[StartTime]}" FontWeight="SemiBold" />
+                                <TimePicker SelectedTime="{Binding BulkStartTime}" ClockIdentifier="24HourClock" HorizontalAlignment="Stretch" />
+                                <TextBlock Text="{Binding Loc[EndTime]}" FontWeight="SemiBold" />
+                                <TimePicker SelectedTime="{Binding BulkEndTime}" ClockIdentifier="24HourClock" HorizontalAlignment="Stretch" />
+                            </StackPanel>
                         </StackPanel>
 
                         <!-- Day of week checkboxes — only shown when no specific days selected -->

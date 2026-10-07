@@ -24,7 +24,10 @@ public enum AdminSection
     WorkCards,
     WorkCardScan,
     Overtime,
-    SubmissionLog
+    Reports,
+    SubmissionLog,
+    Help,
+    Administration
 }
 
 /// <summary>
@@ -564,6 +567,11 @@ public partial class AdminShellViewModel : ViewModelBase
                         .GetRequiredService<
                             WorkCardScanViewModel>(),
 
+                AdminSection.Reports =>
+                    _services
+                        .GetRequiredService<
+                            ReportsViewModel>(),
+
                 AdminSection.Overtime =>
                     _services
                         .GetRequiredService<
@@ -573,6 +581,16 @@ public partial class AdminShellViewModel : ViewModelBase
                     _services
                         .GetRequiredService<
                             SubmissionLogViewModel>(),
+
+                AdminSection.Help =>
+                    _services
+                        .GetRequiredService<
+                            HelpViewModel>(),
+
+                AdminSection.Administration =>
+                    _services
+                        .GetRequiredService<
+                            AdministrationViewModel>(),
 
                 _ =>
                     throw new ArgumentOutOfRangeException(
