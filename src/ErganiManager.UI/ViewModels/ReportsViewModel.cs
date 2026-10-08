@@ -47,6 +47,7 @@ public partial class ReportsViewModel : ViewModelBase, IAdminSectionViewModel
     [ObservableProperty] private EmployeeDto? _selectedEmployee;
 
     [ObservableProperty] private string _grandTotalText = "0:00";
+    [ObservableProperty] private string _nightTotalText = "0:00";
     [ObservableProperty] private bool _hasData;
 
     public string TotalsLabel => Kind == ReportKind.Compare
@@ -117,11 +118,14 @@ public partial class ReportsViewModel : ViewModelBase, IAdminSectionViewModel
                 SummaryMonths.Clear();
                 foreach (var m in _summary.Months) SummaryMonths.Add(m);
                 foreach (var g in _summary.Months.GroupBy(m => (m.EmployeeId, m.EmployeeName)))
+                {
                     EmployeeTotals.Add(new ReportEmployeeTotal
-                        { EmployeeId = g.Key.EmployeeId, EmployeeName = g.Key.EmployeeName, Hours = g.Sum(m => m.ActualHours) });
+                        { EmployeeId = g.Key.EmployeeId, EmployeeName = g.Key.EmployeeName, Hours = g.Sum(m => m.ActualHours), NightHours = g.Sum(m => m.NightHours) });
+                }
                 GrandTotalText = ReportFormat.Hours(_summary.ActualHours);
+                NightTotalText = ReportFormat.Hours(_summary.NightHours);
                 HasData = _summary.Months.Count > 0;
-                StatusMessage = $"Declared {ReportFormat.Hours(_summary.DeclaredHours)} · Actual (from scans) {ReportFormat.Hours(_summary.ActualHours)} · Overtime {ReportFormat.Hours(_summary.OvertimeHours)}. " +
+                StatusMessage = $"Declared {ReportFormat.Hours(_summary.DeclaredHours)} · Actual (from scans) {ReportFormat.Hours(_summary.ActualHours)} · Night {ReportFormat.Hours(_summary.NightHours)} · Overtime {ReportFormat.Hours(_summary.OvertimeHours)}. " +
                                 "Actual = first arrival to last departure of the day; '?' = a scan is missing.";
             }
             else if (IsOvertimeReport)
@@ -131,6 +135,7 @@ public partial class ReportsViewModel : ViewModelBase, IAdminSectionViewModel
                 foreach (var m in _overtime.Months) OvertimeMonths.Add(m);
                 foreach (var t in _overtime.EmployeeTotals) EmployeeTotals.Add(t);
                 GrandTotalText = ReportFormat.Hours(_overtime.GrandTotalHours);
+                NightTotalText = "0:00";
                 HasData = _overtime.Months.Count > 0;
                 StatusMessage = $"{_overtime.Months.Sum(m => m.Records.Count)} overtime record(s) in {_overtime.Months.Count} employee-month group(s).";
             }
@@ -141,6 +146,7 @@ public partial class ReportsViewModel : ViewModelBase, IAdminSectionViewModel
                 foreach (var r in _workTime.Rows) WorkTimeRows.Add(r);
                 foreach (var t in _workTime.EmployeeTotals) EmployeeTotals.Add(t);
                 GrandTotalText = ReportFormat.Hours(_workTime.GrandTotalHours);
+                NightTotalText = "0:00";
                 HasData = _workTime.Rows.Count > 0;
                 StatusMessage = $"{_workTime.Rows.Count} employee-month row(s). Based on the Office/Home schedule days.";
             }
@@ -168,19 +174,19 @@ public partial class ReportsViewModel : ViewModelBase, IAdminSectionViewModel
 
         if (Kind == ReportKind.Compare && _summary != null)
         {
-            sb.AppendLine("Employee;Month;Date;Declared;Declared hours;Actual;Actual hours;Rounded hours;Rounded in → out;Difference;Overtime;Overtime hours");
+            sb.AppendLine("Employee;Month;Date;Declared;Declared hours;Actual;Actual hours;Night hours;Rounded hours;Rounded in → out;Difference;Overtime;Overtime hours");
             foreach (var m in _summary.Months)
             {
                 foreach (var d in m.Days)
                     sb.AppendLine(string.Join(";", Q(m.EmployeeName), m.MonthLabel, d.Date.ToString("dd/MM/yyyy", inv),
-                        Q(d.DeclaredText), d.DeclaredHoursText, Q(d.ActualText), d.ActualHoursText, d.RoundedHoursText, d.RoundedInOutText, CsvDiff(d.DiffHours),
+                        Q(d.DeclaredText), d.DeclaredHoursText, Q(d.ActualText), d.ActualHoursText, d.NightHoursText, d.RoundedHoursText, d.RoundedInOutText, CsvDiff(d.DiffHours),
                         Q(d.OvertimeRanges), d.OvertimeHours > 0 ? ReportFormat.Hours(d.OvertimeHours) : string.Empty));
                 sb.AppendLine(string.Join(";", Q(m.EmployeeName), m.MonthLabel, Q("MONTH TOTAL"), "",
                     ReportFormat.Hours(m.DeclaredHours), "", ReportFormat.Hours(m.ActualHours),
-                    ReportFormat.Hours(m.RoundedHours), "", CsvDiff(m.DiffHours), "", ReportFormat.Hours(m.OvertimeHours)));
+                    ReportFormat.Hours(m.NightHours), ReportFormat.Hours(m.RoundedHours), "", CsvDiff(m.DiffHours), "", ReportFormat.Hours(m.OvertimeHours)));
             }
             sb.AppendLine(string.Join(";", Q("ALL EMPLOYEES"), "", Q("GRAND TOTAL"), "",
-                ReportFormat.Hours(_summary.DeclaredHours), "", ReportFormat.Hours(_summary.ActualHours), ReportFormat.Hours(_summary.RoundedHours), "", "", "", ReportFormat.Hours(_summary.OvertimeHours)));
+                ReportFormat.Hours(_summary.DeclaredHours), "", ReportFormat.Hours(_summary.ActualHours), ReportFormat.Hours(_summary.NightHours), ReportFormat.Hours(_summary.RoundedHours), "", "", "", ReportFormat.Hours(_summary.OvertimeHours)));
         }
         else if (IsOvertimeReport && _overtime != null)
         {

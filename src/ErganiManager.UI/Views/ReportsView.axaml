@@ -57,18 +57,32 @@
                 <Border Background="#1A1D23" CornerRadius="8" Padding="16" IsVisible="{Binding HasData}">
                     <StackPanel Spacing="6">
                         <TextBlock Text="{Binding ReportTitle}" FontWeight="SemiBold" FontSize="15" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="18" IsVisible="{Binding IsCompareReport}">
+                            <TextBlock Grid.Column="1" Text="Actual" Foreground="Gray" FontSize="11" />
+                            <TextBlock Grid.Column="2" Text="{Binding Loc[ReportNightHours]}" Foreground="Gray" FontSize="11" />
+                        </Grid>
                         <ItemsControl ItemsSource="{Binding EmployeeTotals}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="core:ReportEmployeeTotal">
-                                    <Grid ColumnDefinitions="*,Auto">
+                                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="18">
                                         <TextBlock Text="{Binding EmployeeName}" />
                                         <TextBlock Grid.Column="1" Text="{Binding HoursText}" FontWeight="SemiBold" />
+                                        <TextBlock Grid.Column="2" Text="{Binding NightHoursText}" FontWeight="SemiBold" Foreground="#81D4FA"
+                                                   IsVisible="{Binding $parent[ItemsControl].((vm:ReportsViewModel)DataContext).IsCompareReport}" />
                                     </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <Border Height="1" Background="#33FFFFFF" Margin="0,4" />
-                        <Grid ColumnDefinitions="*,Auto">
+                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsCompareReport}">
+                            <TextBlock Text="{Binding TotalsLabel}" FontWeight="Bold" />
+                            <TextBlock Grid.Column="1" Text="{Binding GrandTotalText}" FontWeight="Bold" FontSize="16" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsCompareReport}">
+                            <TextBlock Text="{Binding Loc[ReportNightHours]}" FontWeight="Bold" />
+                            <TextBlock Grid.Column="1" Text="{Binding NightTotalText}" FontWeight="Bold" FontSize="16" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !IsCompareReport}">
                             <TextBlock Text="{Binding TotalsLabel}" FontWeight="Bold" />
                             <TextBlock Grid.Column="1" Text="{Binding GrandTotalText}" FontWeight="Bold" FontSize="16" />
                         </Grid>
@@ -114,58 +128,65 @@
                 </ItemsControl>
 
                 <!-- Declared vs actual: one block per employee + month, one line per day -->
-                <ItemsControl ItemsSource="{Binding SummaryMonths}" IsVisible="{Binding IsCompareReport}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="core:TimeSummaryMonth">
-                            <Border Background="#1A1D23" CornerRadius="8" Padding="14,10">
-                                <StackPanel Spacing="6">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="14" />
-                                        <TextBlock Grid.Column="1" Text="{Binding TotalsText}" FontWeight="Bold" Foreground="#64B5F6" />
-                                    </Grid>
-                                    <Grid ColumnDefinitions="120,130,70,200,80,90,120,80,*" ColumnSpacing="8">
-                                        <TextBlock Text="Date" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="1" Text="Declared" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="2" Text="Hours" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="3" Text="Actual (each in → out)" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="4" Text="Actual hrs" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="5" Text="Rounded" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="6" Text="Rounded in → out" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="7" Text="Diff" Foreground="Gray" FontSize="11" />
-                                        <TextBlock Grid.Column="8" Text="Overtime" Foreground="Gray" FontSize="11" />
-                                    </Grid>
-                                    <ItemsControl ItemsSource="{Binding Days}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="core:DayTimeRow">
-                                                <Grid ColumnDefinitions="120,130,70,200,80,90,120,80,*" ColumnSpacing="8" Margin="0,2">
-                                                    <TextBlock Text="{Binding DateText}" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding DeclaredText}" />
-                                                    <TextBlock Grid.Column="2" Text="{Binding DeclaredHoursText}" />
-                                                    <ItemsControl Grid.Column="3" ItemsSource="{Binding Pairs}">
-                                                        <ItemsControl.ItemTemplate>
-                                                            <DataTemplate x:DataType="core:ScanPair">
-                                                                <TextBlock Text="{Binding Line}" />
-                                                            </DataTemplate>
-                                                        </ItemsControl.ItemTemplate>
-                                                    </ItemsControl>
-                                                    <TextBlock Grid.Column="4" Text="{Binding ActualHoursText}"
-                                                               FontWeight="SemiBold" />
-                                                    <TextBlock Grid.Column="5" Text="{Binding RoundedHoursText}" FontWeight="SemiBold" Foreground="#CE93D8" />
-                                                    <TextBlock Grid.Column="6" Text="{Binding RoundedInOutText}" Foreground="#CE93D8" />
-                                                    <TextBlock Grid.Column="7" Text="{Binding DiffText}" Foreground="#9CCC65" />
-                                                    <TextBlock Grid.Column="8" Text="{Binding OvertimeText}" Foreground="#FFB74D" />
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <ScrollViewer IsVisible="{Binding IsCompareReport}"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto"
+                              MaxHeight="600">
+                    <ItemsControl ItemsSource="{Binding SummaryMonths}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Spacing="10" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="core:TimeSummaryMonth">
+                                <Border Background="#1A1D23" CornerRadius="8" Padding="14,10" MinWidth="1180">
+                                    <StackPanel Spacing="6">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding Header}" FontWeight="SemiBold" FontSize="14" />
+                                            <TextBlock Grid.Column="1" Text="{Binding TotalsText}" FontWeight="Bold" Foreground="#64B5F6" />
+                                        </Grid>
+                                        <Grid ColumnDefinitions="120,130,70,200,80,100,90,120,80,100" ColumnSpacing="8">
+                                            <TextBlock Text="Date" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="1" Text="Declared" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="2" Text="Hours" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="3" Text="Actual (each in → out)" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="4" Text="Actual hrs" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="5" Text="{Binding $parent[ItemsControl].((vm:ReportsViewModel)DataContext).Loc[ReportNightHours]}" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="6" Text="Rounded" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="7" Text="Rounded in → out" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="8" Text="Diff" Foreground="Gray" FontSize="11" />
+                                            <TextBlock Grid.Column="9" Text="Overtime" Foreground="Gray" FontSize="11" />
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{Binding Days}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="core:DayTimeRow">
+                                                    <Grid ColumnDefinitions="120,130,70,200,80,100,90,120,80,100" ColumnSpacing="8" Margin="0,2">
+                                                        <TextBlock Text="{Binding DateText}" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding DeclaredText}" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding DeclaredHoursText}" />
+                                                        <ItemsControl Grid.Column="3" ItemsSource="{Binding Pairs}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="core:ScanPair">
+                                                                    <TextBlock Text="{Binding Line}" />
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <TextBlock Grid.Column="4" Text="{Binding ActualHoursText}"
+                                                                   FontWeight="SemiBold" />
+                                                        <TextBlock Grid.Column="5" Text="{Binding NightHoursText}" FontWeight="SemiBold" Foreground="#81D4FA" />
+                                                        <TextBlock Grid.Column="6" Text="{Binding RoundedHoursText}" FontWeight="SemiBold" Foreground="#CE93D8" />
+                                                        <TextBlock Grid.Column="7" Text="{Binding RoundedInOutText}" Foreground="#CE93D8" />
+                                                        <TextBlock Grid.Column="8" Text="{Binding DiffText}" Foreground="#9CCC65" />
+                                                        <TextBlock Grid.Column="9" Text="{Binding OvertimeText}" Foreground="#FFB74D" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
 
                 <!-- Working time report: one row per employee + month -->
                 <StackPanel IsVisible="{Binding IsWorkTimeReport}" Spacing="4">

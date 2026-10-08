@@ -31,7 +31,7 @@
                            FontWeight="Bold" />
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                    <Button Content="🌐 Open Work Cards portal"
+                    <Button Content="{Binding Loc[OpenWorkCardsPortal]}"
                             Command="{Binding OpenErganiWorkCardsPortalCommand}"
                             IsEnabled="{Binding !IsLoading}" />
                     <Button Content="⬇ Export to Excel"

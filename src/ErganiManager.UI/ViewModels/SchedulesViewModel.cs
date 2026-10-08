@@ -74,6 +74,7 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     private readonly IBranchService     _branchService;
     private readonly IScheduleSubmitter _scheduleSubmitter;
     private readonly IErganiDocumentService _documentService;
+    private readonly IRoundingSettingsService _roundingSettings;
     private readonly ILeaveService _leaveService;
     private readonly IErganiPortalService _portalService;
     private readonly ILeaveSubmitter _leaveSubmitter;
@@ -111,6 +112,11 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     public bool IsWeekView  => ViewMode == ScheduleViewMode.Week;
 
     public ObservableCollection<CalendarCellViewModel> Cells { get; } = new();
+
+    /// <summary>Three predefined shifts configured in Administration.</summary>
+    public ObservableCollection<WorkShiftDefinition> AvailableShifts { get; } = new();
+    [ObservableProperty] private WorkShiftDefinition? _selectedEditingShift;
+    [ObservableProperty] private WorkShiftDefinition? _selectedBulkShift;
 
     [ObservableProperty] private bool _hasActiveCompany;
     [ObservableProperty] private string _noCompanyMessage = string.Empty;
@@ -213,7 +219,7 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         IEmployeeService employeeService, IBranchService branchService,
         IScheduleSubmitter scheduleSubmitter, IErganiDocumentService documentService,
         ILeaveService leaveService, ILeaveSubmitter leaveSubmitter,
-        IErganiPortalService portalService)
+        IErganiPortalService portalService, IRoundingSettingsService roundingSettings)
     {
         _portalService  = portalService;
         _portalService.Progress += message =>
@@ -227,6 +233,39 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         _branchService     = branchService;
         _scheduleSubmitter = scheduleSubmitter;
         _documentService   = documentService;
+        _roundingSettings  = roundingSettings;
+        LoadAvailableShifts();
+    }
+
+    private void LoadAvailableShifts()
+    {
+        AvailableShifts.Clear();
+        var shifts = (_roundingSettings.Current.Shifts ?? RoundingRules.DefaultShifts()).Take(3).ToList();
+        var defaults = RoundingRules.DefaultShifts();
+        for (var i = 0; i < 3; i++)
+        {
+            var shift = i < shifts.Count ? shifts[i] : defaults[i];
+            AvailableShifts.Add(shift.Clone());
+        }
+    }
+
+    private WorkShiftDefinition? FindMatchingShift(TimeSpan? start, TimeSpan? end) =>
+        start is { } s && end is { } e
+            ? AvailableShifts.FirstOrDefault(x => x.StartTime == s && x.EndTime == e)
+            : null;
+
+    partial void OnSelectedEditingShiftChanged(WorkShiftDefinition? value)
+    {
+        if (value == null) return;
+        EditingStartTime = value.StartTime;
+        EditingEndTime = value.EndTime;
+    }
+
+    partial void OnSelectedBulkShiftChanged(WorkShiftDefinition? value)
+    {
+        if (value == null) return;
+        BulkStartTime = value.StartTime;
+        BulkEndTime = value.EndTime;
     }
 
     public void Initialize(UserSession session)
@@ -491,6 +530,7 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     private async Task OpenDayDialogAsync(CalendarCellViewModel cell)
     {
         if (cell.Date is not DateOnly date || SelectedEmployee == null) return;
+        LoadAvailableShifts();
 
         ScheduleDayDto? day;
         try { day = await _scheduleService.GetByDateAsync(SelectedEmployee.Id, date); }
@@ -502,8 +542,10 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
         EditingDate       = date;
         EditingScheduleId = existing?.Id ?? 0;
         EditingWorkType   = existing?.WorkType ?? AppWorkType.Office;
-        EditingStartTime  = existing?.StartTime?.ToTimeSpan() ?? new TimeSpan(9, 0, 0);
-        EditingEndTime    = existing?.EndTime?.ToTimeSpan()   ?? new TimeSpan(17, 0, 0);
+        SelectedEditingShift = FindMatchingShift(existing?.StartTime?.ToTimeSpan(), existing?.EndTime?.ToTimeSpan())
+            ?? AvailableShifts.FirstOrDefault();
+        EditingStartTime  = existing?.StartTime?.ToTimeSpan() ?? SelectedEditingShift?.StartTime ?? new TimeSpan(9, 0, 0);
+        EditingEndTime    = existing?.EndTime?.ToTimeSpan()   ?? SelectedEditingShift?.EndTime ?? new TimeSpan(17, 0, 0);
         EditingComments   = existing?.Comments ?? string.Empty;
         EditingSubmitted  = existing?.SubmittedToErgani ?? false;
         EditingBranch     = (existing != null
@@ -664,11 +706,13 @@ public partial class SchedulesViewModel : ViewModelBase, IAdminSectionViewModel
     private void OpenBulkDialog()
     {
         if (SelectedEmployee == null) return;
+        LoadAvailableShifts();
         // Pre-fill from / to based on current view and selection
         IsBulkDialogOpen = true;
         BulkWorkType  = AppWorkType.Office;
-        BulkStartTime = new TimeSpan(9, 0, 0);
-        BulkEndTime   = new TimeSpan(17, 0, 0);
+        SelectedBulkShift = AvailableShifts.FirstOrDefault();
+        BulkStartTime = SelectedBulkShift?.StartTime ?? new TimeSpan(9, 0, 0);
+        BulkEndTime   = SelectedBulkShift?.EndTime ?? new TimeSpan(17, 0, 0);
         // Day-of-week checkboxes stay as user left them
     }
 

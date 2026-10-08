@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -6,6 +7,7 @@ using ErganiManager.Core.Interfaces;
 using ErganiManager.Core.Models;
 using System.Collections.ObjectModel;
 using System.Linq;
+using ErganiManager.UI.Localization;
 
 namespace ErganiManager.UI.ViewModels;
 
@@ -55,7 +57,12 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
 
     /// <summary>Editable rounding bands used by the "Rounded" column of the Declared vs actual report.</summary>
     public ObservableCollection<RoundingBandEdit> RoundingBands { get; } = new();
+    public ObservableCollection<ShiftEdit> Shifts { get; } = new();
     [ObservableProperty] private string _roundingStatus = string.Empty;
+
+    [ObservableProperty] private TimeSpan? _nightStartTime = new(22, 0, 0);
+    [ObservableProperty] private TimeSpan? _nightEndTime = new(6, 0, 0);
+    [ObservableProperty] private string _nightStatus = string.Empty;
 
     public AdministrationViewModel(IDatabaseMaintenanceService maintenance, IRoundingSettingsService rounding,
         IPortalSettingsService portal)
@@ -83,7 +90,11 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
         WorkCardsPortalDateFormat = workCards.DateFormat;
         WorkCardsPortalAutoSearch = workCards.AutoSearch;
         WorkCardsPortalSearchButton = workCards.SearchButtonId;
-        LoadRounding(_rounding.Current.Bands);
+        var rules = _rounding.Current;
+        LoadRounding(rules.Bands);
+        LoadShifts(rules.Shifts);
+        NightStartTime = TimeSpan.FromMinutes(Math.Clamp(rules.NightStartMinuteOfDay, 0, 1439));
+        NightEndTime = TimeSpan.FromMinutes(Math.Clamp(rules.NightEndMinuteOfDay, 0, 1439));
     }
 
     private void LoadRounding(System.Collections.Generic.IEnumerable<RoundingBand> bands)
@@ -93,13 +104,45 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
             RoundingBands.Add(new RoundingBandEdit(b.FromMinute, b.ToMinute, b.RoundToMinute));
     }
 
+    private void LoadShifts(System.Collections.Generic.IEnumerable<WorkShiftDefinition>? shifts)
+    {
+        Shifts.Clear();
+        var source = (shifts ?? RoundingRules.DefaultShifts()).Take(3).ToList();
+        var defaults = RoundingRules.DefaultShifts();
+        for (var i = 0; i < 3; i++)
+        {
+            var shift = i < source.Count ? source[i] : defaults[i];
+            Shifts.Add(new ShiftEdit(shift.Name, shift.StartTime, shift.EndTime));
+        }
+    }
+
+    private List<WorkShiftDefinition> BuildShifts()
+    {
+        if (Shifts.Count != 3)
+            throw new InvalidOperationException(Loc[L.ThreeShiftsRequired]);
+
+        var result = new List<WorkShiftDefinition>();
+        foreach (var shift in Shifts)
+        {
+            var name = (shift.Name ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(name) || shift.StartTime is not { } start || shift.EndTime is not { } end)
+                throw new InvalidOperationException(Loc[L.ShiftValuesRequired]);
+            if (start < TimeSpan.Zero || start >= TimeSpan.FromDays(1) || end < TimeSpan.Zero || end >= TimeSpan.FromDays(1))
+                throw new InvalidOperationException(Loc[L.ShiftTimesInvalid]);
+            if (start == end)
+                throw new InvalidOperationException(Loc[L.ShiftTimesEqual]);
+            result.Add(new WorkShiftDefinition { Name = name, StartTime = start, EndTime = end });
+        }
+        return result;
+    }
+
     [RelayCommand]
     private void SaveSchedulePortal()
     {
         try
         {
             var schedule = BuildScheduleProfile();
-            if (!ValidatePortalUrl(schedule.PortalBaseUrl, "Schedule", out var error))
+            if (!ValidatePortalUrl(schedule.PortalBaseUrl, Loc[L.PortalBaseAddress], out var error))
             {
                 SchedulePortalStatus = error;
                 return;
@@ -108,11 +151,11 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
             var current = _portal.Current;
             current.Schedule = schedule;
             _portal.Save(current);
-            SchedulePortalStatus = "✅ Schedule portal settings saved.";
+            SchedulePortalStatus = Loc[L.SchedulePortalSaved];
         }
         catch (Exception ex)
         {
-            SchedulePortalStatus = $"❌ Could not save Schedule portal settings: {ex.Message}";
+            SchedulePortalStatus = string.Format(Loc[L.CouldNotSaveSchedulePortal], ex.Message);
         }
     }
 
@@ -122,7 +165,7 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
         try
         {
             var workCards = BuildWorkCardsProfile();
-            if (!ValidatePortalUrl(workCards.PortalBaseUrl, "Work Cards", out var error))
+            if (!ValidatePortalUrl(workCards.PortalBaseUrl, Loc[L.WorkCardsPortal], out var error))
             {
                 WorkCardsPortalStatus = error;
                 return;
@@ -131,11 +174,11 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
             var current = _portal.Current;
             current.WorkCards = workCards;
             _portal.Save(current);
-            WorkCardsPortalStatus = "✅ Work Cards portal settings saved.";
+            WorkCardsPortalStatus = Loc[L.WorkCardsPortalSaved];
         }
         catch (Exception ex)
         {
-            WorkCardsPortalStatus = $"❌ Could not save Work Cards portal settings: {ex.Message}";
+            WorkCardsPortalStatus = string.Format(Loc[L.CouldNotSaveWorkCardsPortal], ex.Message);
         }
     }
 
@@ -164,12 +207,12 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
         SearchButtonId = (WorkCardsPortalSearchButton ?? string.Empty).Trim()
     };
 
-    private static bool ValidatePortalUrl(string value, string name, out string message)
+    private bool ValidatePortalUrl(string value, string name, out string message)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
             (uri.Scheme != "https" && uri.Scheme != "http"))
         {
-            message = $"❌ {name} portal address must be a full web address.";
+            message = string.Format(Loc[L.PortalInvalidUrl], name);
             return false;
         }
 
@@ -190,7 +233,36 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
     private void RestoreRoundingDefaults()
     {
         LoadRounding(RoundingRules.Defaults());
+        LoadShifts(RoundingRules.DefaultShifts());
+        NightStartTime = new TimeSpan(22, 0, 0);
+        NightEndTime = new TimeSpan(6, 0, 0);
         RoundingStatus = "Defaults loaded — press Save to apply them.";
+    }
+
+    [RelayCommand]
+    private void SaveNightHours()
+    {
+        try
+        {
+            if (NightStartTime is not { } nightStart || NightEndTime is not { } nightEnd ||
+                nightStart < TimeSpan.Zero || nightStart >= TimeSpan.FromDays(1) ||
+                nightEnd < TimeSpan.Zero || nightEnd >= TimeSpan.FromDays(1) || nightStart == nightEnd)
+            {
+                NightStatus = "❌ Night start/end must be valid times between 00:00 and 23:59.";
+                return;
+            }
+
+            var current = _rounding.Current;
+            _rounding.Save(new RoundingRules
+            {
+                Bands = current.Bands,
+                Shifts = BuildShifts(),
+                NightStartMinuteOfDay = nightStart.Hours * 60 + nightStart.Minutes,
+                NightEndMinuteOfDay = nightEnd.Hours * 60 + nightEnd.Minutes
+            });
+            NightStatus = Loc[L.NightSettingsSaved] + " " + Loc[L.NightSettingsApply];
+        }
+        catch (Exception ex) { NightStatus = $"❌ {ex.Message}"; }
     }
 
     [RelayCommand]
@@ -213,8 +285,22 @@ public partial class AdministrationViewModel : ViewModelBase, IAdminSectionViewM
 
         try
         {
-            _rounding.Save(new RoundingRules { Bands = bands });
-            RoundingStatus = "✅ Rounding rules saved. Generate the report again to see them.";
+            if (NightStartTime is not { } nightStart || NightEndTime is not { } nightEnd ||
+                nightStart < TimeSpan.Zero || nightStart >= TimeSpan.FromDays(1) ||
+                nightEnd < TimeSpan.Zero || nightEnd >= TimeSpan.FromDays(1) || nightStart == nightEnd)
+            {
+                RoundingStatus = "❌ Night start/end must be valid times between 00:00 and 23:59.";
+                return;
+            }
+
+            _rounding.Save(new RoundingRules
+            {
+                Bands = bands,
+                Shifts = BuildShifts(),
+                NightStartMinuteOfDay = nightStart.Hours * 60 + nightStart.Minutes,
+                NightEndMinuteOfDay = nightEnd.Hours * 60 + nightEnd.Minutes
+            });
+            RoundingStatus = Loc[L.NightSettingsSaved] + " " + Loc[L.NightSettingsApply];
         }
         catch (Exception ex) { RoundingStatus = $"❌ {ex.Message}"; }
     }
